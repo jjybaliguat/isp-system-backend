@@ -83,6 +83,84 @@ export const createBilling = async (req: Request, res: Response) => {
     }
 }
 
+export const createBillingForAccount = async (req: Request, res: Response) => {
+    const {
+        period,
+        description,
+        amount,
+        accountId,
+        dueDate
+    } = req.body
+    
+    const {providerId} = req.user as {id: string, providerId: string}
+
+    try {
+        const billDuedate = dueDate ? new Date(dueDate) : null
+        if(billDuedate && isNaN(billDuedate.getTime())){
+            return res.status(400).json({ dueDate: 'installationDate must be a valid date' });
+        }
+        if(!period){
+            res.status(400).json({message: "Bill Period is required"})
+        }
+        const account = await prisma.accounts.findUnique({
+            where: { id: accountId },
+            include: {
+                servicePlan: true
+            }
+        })
+
+        if(!account) {
+            return res.status(404).json({ message: 'Account not found' });
+        }
+
+        const provider = await prisma.provider.findUnique({
+            where: { id: providerId },
+            select: { settings: true },
+        });
+
+        const settings = provider?.settings as
+        | { 
+            billing?: { invoiceGenerationDaysBeforeDue?: number },
+            invoiceDocument?: {
+                numberPrefix: string,
+                startingNumber: number,
+                includeTax: boolean,
+                taxRate: number,
+                companyLogoUrl: string,
+                footerMessage: string
+            }
+            }
+        | undefined;
+
+        const today = new Date()
+        const prefix = settings?.invoiceDocument?.numberPrefix || 'INV-';
+        const invoiceNumber = `${prefix}${today.getFullYear().toString().slice(2)}${Math.floor(Math.random()*1e10).toString().padStart(10,'0')}`;
+
+        let defaultDescription;
+        if(!description){
+            defaultDescription = `Bill-Period-${period}-Acc-${account.accountNumber}`
+        }
+
+        const billing = await prisma.billing.create({
+            data: {
+                invoiceNumber: invoiceNumber || `${Date.now().toString().slice(-10)}`,
+                clientId: account.clientId,
+                accountId,
+                amount: amount  || account.servicePlan?.monthlyFee!,
+                dueDate: billDuedate || new Date(new Date().setDate(account.billingDay!)),
+                period,
+                description: description || defaultDescription
+            }
+        })
+
+
+        return res.status(201).json(billing);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
 export const getBillingByAccountNumber = async (req: Request, res: Response) => {
     const { accountNumber } = req.params as { accountNumber: string }
 
@@ -343,7 +421,6 @@ export const confirmPayment =  async (req: Request, res: Response) => {
     }
 
     const payDate = new Date(paymentDate);
-    console.log(payDate)
 
     if(isNaN(payDate.getTime())){
         return res.status(400).json({message: "Payment Date is is not a valid date"})
@@ -389,6 +466,7 @@ export const confirmPayment =  async (req: Request, res: Response) => {
             data: {
                 billingId: id,
                 clientId: bill.clientId,
+                accountId: bill.accountId,
                 amount,
                 status: "PAID",
                 paymentMethod,
