@@ -1,5 +1,6 @@
-import { addMonths, startOfMonth, endOfMonth, addDays, format, getDate, startOfDay } from "date-fns";
-import { PrismaClient } from "@prisma/client";
+import { addMonths, startOfMonth, endOfMonth, addDays, format, getDate, startOfDay, endOfDay } from "date-fns";
+import { Prisma, PrismaClient } from "@prisma/client";
+import { toZonedTime } from "date-fns-tz";
 
 const prisma = new PrismaClient();
 
@@ -92,26 +93,52 @@ export const generateInvoices = async (providerId: string) => {
 
     const prefix = settings?.invoiceDocument?.numberPrefix || 'INV-';
 
-    const newInvoices = accounts.map((account, index) => {
-        const invoiceNumber = `${prefix}${today.getFullYear().toString().slice(2)}${Math.floor(Math.random()*1e10).toString().padStart(10,'0')}`;
-        const dueDate = addDays((start), (account.billingDay! - 1));
-        return {
+    const invoicePromises = accounts.map(async (account) => {
+      if (!account.billingDay) return null;
+
+      // Generate unique invoice number
+      const invoiceNumber = `${prefix}${today.getFullYear().toString().slice(2)}${Math.floor(Math.random() * 1e10).toString().padStart(10, '0')}`;
+
+      // Calculate due date in Manila timezone
+      const dueDate = addDays(start, account.billingDay - 1);
+      const startUtc = toZonedTime(startOfDay(dueDate), "Asia/Manila");
+      const endUtc = toZonedTime(endOfDay(dueDate), "Asia/Manila");
+
+      // Skip if a billing already exists
+      const existing = await prisma.billing.findFirst({
+        where: {
+          accountId: account.id,
+          dueDate: {
+            gte: startUtc,
+            lte: endUtc,
+          },
+        },
+      });
+      if (existing) return null;
+
+      return {
         invoiceNumber,
         clientId: account.clientId,
         accountId: account.id,
         billingDate: today,
         period,
         dueDate,
-        amount: account.servicePlan?.monthlyFee ?? 0, // assuming client has monthlyFee field
+        amount: account.servicePlan?.monthlyFee ?? 0,
         description: `Monthly Internet Subscription for ${period}`,
       };
     });
 
-    await prisma.billing.createMany({
-      data: newInvoices,
-    });
+    // Resolve all promises
+    const invoices = (await Promise.all(invoicePromises)).filter(Boolean) as Prisma.BillingCreateManyInput[];
 
-    console.log(`✅ Successfully generated ${newInvoices.length} invoices for ${period}`);
+    // Insert all new invoices at once
+    if (invoices.length > 0) {
+      await prisma.billing.createMany({
+        data: invoices,
+      });
+    }
+
+    console.log(`✅ Successfully generated ${invoices.length} invoices for ${period}`);
   } catch (error) {
     console.error("❌ Error generating invoices:", error);
   }
