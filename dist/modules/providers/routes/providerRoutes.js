@@ -1,0 +1,19 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const providerController_1 = require("../controllers/providerController");
+const authMiddleware_1 = require("../../../middlewares/authMiddleware");
+const router = (0, express_1.Router)();
+router.get('/get-provider', authMiddleware_1.authenticateProvider, providerController_1.getProvider);
+router.patch('/update-account', authMiddleware_1.authenticateProvider, providerController_1.updateAccount);
+// router.get('/:id', getProviderById);
+// router.post('/', createProvider);
+// router.patch('/:id', updateProvider);
+// router.delete('/:id', deleteProvider);
+router.post('/xendit-key', authMiddleware_1.authenticateProvider, providerController_1.updateXenditKey);
+router.post('/semaphore-key', authMiddleware_1.authenticateProvider, providerController_1.updateSemaphoreKey);
+router.get('/stored-keys', authMiddleware_1.authenticateProvider, providerController_1.getStoredKey);
+router.get('/xendit-test', authMiddleware_1.authenticateProvider, authMiddleware_1.validateProviderXenditKey, providerController_1.testXenditConnection);
+router.get('/semaphore-test', authMiddleware_1.authenticateProvider, authMiddleware_1.validateProviderSmsKey, providerController_1.testSemaphoreConnection);
+exports.default = router;
+//# sourceMappingURL=providerRoutes.js.map

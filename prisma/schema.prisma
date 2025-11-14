@@ -1,0 +1,506 @@
+generator client {
+  provider = "prisma-client-js"
+  // output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         String    @id @default(uuid()) @db.Uuid
+  email      String    @unique
+  password   String
+  fullName   String?
+  employeeId String? @db.Uuid @unique
+  employee   Employees? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  provider   Provider  @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  providerId String    @db.Uuid
+  role       UserRole  @default(USER)
+  allowAccess Boolean @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  logs       Log[]
+
+  tickets Ticket[] @relation("createdTickets")
+
+  TicketComment TicketComment[]
+
+  TicketLog TicketLog[]
+}
+
+enum UserRole {
+  SUPERADMIN
+  ADMIN
+  USER
+  INSTALLER_TECHNICIAN
+}
+
+model Client {
+  id               String        @id @default(uuid()) @db.Uuid
+  code             String        @unique
+  fullName         String
+  email            String        @unique
+  phoneNumber      String        @unique
+  address          String
+  installationDate DateTime?     
+  terminationDate  DateTime?
+  accountNumber    String        @unique
+  billingDay      Int?          @default(1) @db.SmallInt
+  notes            String?
+  mikrotikAccount  String?       
+  status           ClientStatus  @default(ACTIVE)
+  paymentType     PaymentType  @default(POSTPAID)
+  taxStatus       TaxStatus     @default(NOT_ACTIVE)
+
+  // Relations
+  servicePlan      ServicePlan?  @relation(fields: [servicePlanId], references: [id], onDelete: SetNull)
+  servicePlanId    String?        @db.Uuid
+
+  provider         Provider      @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  providerId       String        @db.Uuid
+
+  clientType       ClientType?   @relation(fields: [clientTypeId], references: [id], onDelete: SetNull)
+  clientTypeId     String?       @db.Uuid
+  coverageId       String?      @db.Uuid
+  coverage         Coverage? @relation(fields: [coverageId], references: [id], onDelete: SetNull)
+
+  billings         Billing[]
+  payments         Payment[]
+  tickets          Ticket[]
+
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  odpPort          OdpPort?
+}
+
+enum TaxStatus {
+  ACTIVE
+  NOT_ACTIVE
+}
+
+enum PaymentType {
+  PREPAID
+  POSTPAID
+}
+
+enum ClientStatus {
+  ACTIVE
+  PARTIALLY_DISCONNECTED
+  TERMINATED
+}
+
+model Billing {
+  id           String    @id @default(uuid()) @db.Uuid
+  invoiceNumber String
+  client       Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId     String    @db.Uuid
+  billingDate  DateTime  @default(now())
+  period       String?
+  dueDate      DateTime
+  amount       Float
+  paidAmount   Float?    @default(0)
+  status       BillingStatus  @default(PENDING)
+  description  String?
+
+  payments     Payment[]
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model CronJob {
+  id           String   @id @default(uuid()) @db.Uuid
+  providerId     String
+  providerName String
+  schedule     String
+  type         String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  @@unique([providerId, type], name: "providerId_type")
+}
+
+enum BillingStatus {
+  PENDING
+  PAID
+  PARTIALLY_PAID
+  OVERDUE
+  CANCELLED
+}
+
+model Payment {
+  id             String     @id @default(uuid()) @db.Uuid
+  billingId      String     @db.Uuid
+  clientId       String     @db.Uuid
+  amount         Decimal    @db.Decimal(10, 2)
+  status         PaymentStatus @default(PENDING)
+  paymentMethod  String?
+  paymentChannel String?
+  referenceId    String?    
+  xenditInvoiceId String?   @unique
+  xenditPaymentUrl String?
+  paidAt         DateTime?
+  remarks        String?
+  recordedBy     String?
+  paymentDate    DateTime?
+  createdAt      DateTime   @default(now())
+
+  billing        Billing    @relation(fields: [billingId], references: [id], onDelete: Cascade)
+  client         Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+model Provider {
+  id               String        @id @default(uuid()) @db.Uuid
+  name             String        @unique
+  companyName      String
+  companyAddress   String
+  email            String        @unique
+  phoneNumber      String?
+  companyLogoUrl   String? @default("https://res.cloudinary.com/dyjappbhk/image/upload/v1762924997/default-logo_rrbvc5.png")
+  subscriptionStatus SubscriptionStatus @default(INACTIVE)
+  xenditApiKey  String? @unique
+  semaphoreApiKey String? @unique
+
+  // Relations
+  clientTypes    ClientType[]
+  clients          Client[]
+  servicePlans   ServicePlan[]
+  coverage       Coverage[]
+  users          User[]
+  logs           Log[]
+  employees      Employees[]
+  teams          EmployeesTeam[]
+  settings  Json? @default("{}")
+
+  Ticket Ticket[]
+
+  olts OLT[]
+
+  lcps LCP[]
+
+  odcs ODC[]
+
+  odps ODP[]
+}
+
+model Coverage {
+  id               String        @id @default(uuid()) @db.Uuid
+  name  String
+  latitude Float
+  longitude Float
+  radius  Int? @default(200)
+  providerId  String  @db.Uuid
+  provider Provider @relation(fields: [providerId], references: [id])
+  
+  clients Client[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, providerId])
+}
+
+model ServicePlan {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String   
+  speedMbps    Float
+  monthlyFee   Float
+  isActive     Boolean  @default(true)
+  descriptions String[]
+  showToWebsite Boolean @default(false)
+
+  provider     Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  providerId   String   @db.Uuid
+
+  clients      Client[]
+}
+
+
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  EXPIRED
+}
+
+model ClientType {
+  id       String   @id @default(uuid()) @db.Uuid
+  name String  
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  providerId String @db.Uuid
+
+  clients  Client[]
+
+  @@unique([name, providerId])
+}
+
+model Log {
+  id        String    @id @default(uuid()) @db.Uuid
+  action    String
+  entity    String
+  userId    String?    @db.Uuid
+  createdAt DateTime   @default(now())
+  message   String?
+
+  user      User?      @relation(fields: [userId], references: [id])
+  providerId String   @db.Uuid
+  provider   Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+}
+
+model Ticket {
+  id           String       @id @default(uuid()) @db.Uuid
+  ticketNumber String
+  subject      String
+  description  String?
+  priority     TicketPriority  @default(MEDIUM)
+  status       TicketStatus    @default(PENDING)
+  category     TicketCategory  @default(GENERAL)
+  attachments  String[] 
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  dueDate      DateTime?    
+
+  client       Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientId     String?         @db.Uuid
+
+  assignedToTeam   EmployeesTeam?  @relation("assignedTickets", fields: [assignedToTeamId], references: [id], onDelete: SetNull)
+  assignedToTeamId String?         @db.Uuid
+  assignedToEmployeeId String?         @db.Uuid
+  assignedToEmployee   Employees?  @relation("assignedTickets", fields: [assignedToEmployeeId], references: [id], onDelete: SetNull)
+
+  createdBy    User?           @relation("createdTickets", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById  String?         @db.Uuid
+
+  provider     Provider        @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  providerId   String          @db.Uuid
+
+  comments     TicketComment[]
+  activityLogs TicketLog[]
+}
+
+model TicketComment {
+  id         String    @id @default(uuid()) @db.Uuid
+  message    String
+  createdAt  DateTime  @default(now())
+
+  ticket     Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticketId   String    @db.Uuid
+
+  user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId     String?   @db.Uuid
+}
+
+model TicketLog {
+  id         String    @id @default(uuid()) @db.Uuid
+  action     String
+  createdAt  DateTime  @default(now())
+
+  ticket     Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticketId   String    @db.Uuid
+
+  user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId     String?   @db.Uuid
+}
+
+model Employees {
+  id String    @id @default(uuid()) @db.Uuid
+  fullName  String
+  email     String @unique
+  phoneNumber String
+  address String
+  role String
+  status EmployeeStatus @default(ACTIVE)
+  hireDate  DateTime
+  teamId  String? @db.Uuid
+  team   EmployeesTeam? @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  providerId String @db.Uuid
+  provider Provider @relation(fields: [providerId], references: [id])
+  user User?
+
+  createdAt DateTime @default(now())
+
+  Ticket Ticket[] @relation("assignedTickets")
+}
+
+model EmployeesTeam {
+  id String    @id @default(uuid()) @db.Uuid
+  name String
+  providerId String @db.Uuid
+  provider Provider @relation(fields: [providerId], references: [id])
+  assignedTickets Ticket[] @relation("assignedTickets")
+
+  employees Employees[]
+}
+
+model OLT {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String
+  brand       String?
+  model       String?
+  ponCount    Int
+  ipAddress   String?
+  location    String?
+  latitude    Float?
+  longitude   Float?
+  remarks     String?
+
+  provider    Provider  @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  providerId  String    @db.Uuid
+
+  ponPorts    PonPort[]
+  lcps        LCP[]     // convenience relation for quick lookup
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model PonPort {
+  id          String     @id @default(uuid()) @db.Uuid
+  portNumber  Int
+  description String?
+  status      PonPortStatus @default(ACTIVE)
+
+  olt         OLT        @relation(fields: [oltId], references: [id], onDelete: Cascade)
+  oltId       String     @db.Uuid
+
+  lcps        LCP[]      // one PON port can serve multiple LCPs
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@unique([oltId, portNumber]) // prevent duplicate port numbers on same OLT
+}
+
+enum PonPortStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+}
+
+model LCP {
+  id          String    @id @default(uuid()) @db.Uuid
+  lcpCode        String
+  location    String?
+  latitude    Float?
+  longitude   Float?
+  remarks     String?
+
+  ponPort     PonPort   @relation(fields: [ponPortId], references: [id], onDelete: Cascade)
+  ponPortId   String    @db.Uuid
+
+  olt         OLT       @relation(fields: [oltId], references: [id], onDelete: Cascade)
+  oltId       String    @db.Uuid
+
+  provider    Provider  @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  providerId  String    @db.Uuid
+
+  odcs        ODC[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model ODC {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  cabinetCode String?  @unique
+  location    String?
+  latitude    Float?
+  longitude   Float?
+  remarks     String?
+
+  lcp         LCP      @relation(fields: [lcpId], references: [id], onDelete: Cascade)
+  lcpId       String   @db.Uuid
+
+  provider    Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  providerId  String   @db.Uuid
+
+  odps        ODP[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ODP {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  odpCode     String?  @unique
+  portCount   Int      @default(8)
+  location    String?
+  latitude    Float?
+  longitude   Float?
+  remarks     String?
+
+  odc         ODC      @relation(fields: [odcId], references: [id], onDelete: Cascade)
+  odcId       String   @db.Uuid
+
+  provider    Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  providerId  String   @db.Uuid
+
+  ports       OdpPort[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model OdpPort {
+  id          String   @id @default(uuid()) @db.Uuid
+  portNumber  Int
+  status      PortStatus @default(AVAILABLE)
+  remarks     String?
+
+  odp         ODP      @relation(fields: [odpId], references: [id], onDelete: Cascade)
+  odpId       String   @db.Uuid
+
+  client      Client?     @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientId    String?     @unique @db.Uuid  
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([odpId, portNumber]) // prevent duplicate port numbers in same ODP
+}
+
+enum PortStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED
+  DAMAGED
+}
+
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketStatus {
+  PENDING
+  ONGOING
+  RESOLVED
+  CLOSED
+  OVERDUE
+}
+
+enum TicketCategory {
+  BILLING
+  TECHNICAL
+  INSTALLATION
+  SERVICE
+  REPAIR
+  GENERAL
+}
+

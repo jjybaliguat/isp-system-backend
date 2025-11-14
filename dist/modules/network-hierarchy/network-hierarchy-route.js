@@ -1,0 +1,23 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const authMiddleware_1 = require("../../middlewares/authMiddleware");
+const network_hierarchy_controller_1 = require("./network-hierarchy-controller");
+const router = (0, express_1.Router)();
+router.get("/", authMiddleware_1.authenticateProvider, network_hierarchy_controller_1.getNetworkHierarchy);
+router.post("/olt", authMiddleware_1.authenticateProvider, network_hierarchy_controller_1.createOlt);
+router.post("/pon-port", authMiddleware_1.authenticateProvider, network_hierarchy_controller_1.createPonPort);
+router.post("/lcp", authMiddleware_1.authenticateProvider, network_hierarchy_controller_1.createLcp);
+router.post("/odc", authMiddleware_1.authenticateProvider, network_hierarchy_controller_1.createOdc);
+router.post("/odp", authMiddleware_1.authenticateProvider, network_hierarchy_controller_1.createOdp);
+router.post("/odp-port", authMiddleware_1.authenticateProvider, network_hierarchy_controller_1.createOdpPort);
+router.patch("/odp-port/assign", authMiddleware_1.authenticateProvider, network_hierarchy_controller_1.assignOdpPort);
+router.patch("/odp-port/unassign", authMiddleware_1.authenticateProvider, network_hierarchy_controller_1.unAssignOdpPort);
+router.delete("/olt/:id", authMiddleware_1.authenticateProvider, network_hierarchy_controller_1.deleteOlt);
+router.delete("/pon-port/:id", authMiddleware_1.authenticateProvider, network_hierarchy_controller_1.deletePonPort);
+router.delete("/lcp/:id", authMiddleware_1.authenticateProvider, network_hierarchy_controller_1.deleteLcp);
+router.delete("/odc/:id", authMiddleware_1.authenticateProvider, network_hierarchy_controller_1.deleteOdc);
+router.delete("/odp/:id", authMiddleware_1.authenticateProvider, network_hierarchy_controller_1.deleteOdp);
+router.delete("/odp-port/:id", authMiddleware_1.authenticateProvider, network_hierarchy_controller_1.deleteOdpPort);
+exports.default = router;
+//# sourceMappingURL=network-hierarchy-route.js.map

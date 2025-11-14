@@ -1,0 +1,3 @@
+import { Request, Response } from "express";
+export declare const getFinanceAnalytics: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+//# sourceMappingURL=analyticsController.d.ts.map

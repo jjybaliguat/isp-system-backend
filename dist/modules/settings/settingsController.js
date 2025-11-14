@@ -1,0 +1,169 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.updateDocumentsSettings = exports.updateBillingSettings = exports.updatePaymentSettings = exports.updateNotificationsSettings = void 0;
+const jobManager_1 = require("../../jobs/jobManager");
+const client_1 = require("@prisma/client");
+const prisma = new client_1.PrismaClient();
+const updateNotificationsSettings = async (req, res) => {
+    const { enabled, emailUser, emailPass, emailHost, emailPort, senderName, invoiceReminderTemplate, paymentConfirmationTemplate, overdueNoticeTemplate } = req.body;
+    const { providerId } = req.user;
+    try {
+        const provider = await prisma.provider.findUnique({
+            where: { id: providerId },
+            select: { settings: true },
+        });
+        if (!provider) {
+            return res.status(404).json({ message: "Provider not found" });
+        }
+        const currentSettings = typeof provider.settings === "object" && provider.settings !== null
+            ? provider.settings
+            : {};
+        const updatedSettings = {
+            ...currentSettings,
+            notifications: {
+                ...currentSettings?.notifications,
+                enabled,
+                emailUser,
+                emailPass,
+                emailHost,
+                emailPort,
+                senderName,
+                invoiceReminderTemplate,
+                paymentConfirmationTemplate,
+                overdueNoticeTemplate,
+            },
+        };
+        const updatedProvider = await prisma.provider.update({
+            where: { id: providerId },
+            data: {
+                settings: updatedSettings,
+            },
+        });
+        return res.status(200).json(updatedProvider);
+    }
+    catch (error) {
+        console.error("Error updating notification settings:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+};
+exports.updateNotificationsSettings = updateNotificationsSettings;
+const updatePaymentSettings = async (req, res) => {
+    const { latePaymentGracePeriod } = req.body;
+    const { providerId } = req.user;
+    try {
+        const provider = await prisma.provider.findUnique({
+            where: { id: providerId },
+            select: { settings: true },
+        });
+        if (!provider) {
+            return res.status(404).json({ message: "Provider not found" });
+        }
+        const currentSettings = typeof provider.settings === "object" && provider.settings !== null
+            ? provider.settings
+            : {};
+        const updatedSettings = {
+            ...currentSettings,
+            payment: {
+                ...currentSettings?.payment,
+                latePaymentGracePeriod
+            },
+        };
+        const updatedProvider = await prisma.provider.update({
+            where: { id: providerId },
+            data: {
+                settings: updatedSettings,
+            },
+        });
+        return res.status(200).json(updatedProvider);
+    }
+    catch (error) {
+        console.error("Error updating payment settings:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+};
+exports.updatePaymentSettings = updatePaymentSettings;
+const updateBillingSettings = async (req, res) => {
+    const { autoInvoicing, invoiceGenerationDaysBeforeDue, sendInvoiceReminderDaysBeforeDue, } = req.body;
+    const { providerId } = req.user;
+    try {
+        const provider = await prisma.provider.findUnique({
+            where: { id: providerId },
+            select: { name: true, settings: true },
+        });
+        if (!provider) {
+            return res.status(404).json({ message: "Provider not found" });
+        }
+        const currentSettings = typeof provider.settings === "object" && provider.settings !== null
+            ? provider.settings
+            : {};
+        const updatedSettings = {
+            ...currentSettings,
+            billing: {
+                ...currentSettings?.billing,
+                autoInvoicing,
+                invoiceGenerationDaysBeforeDue,
+                sendInvoiceReminderDaysBeforeDue,
+            },
+        };
+        const updatedProvider = await prisma.provider.update({
+            where: { id: providerId },
+            data: {
+                settings: updatedSettings,
+            },
+        });
+        if (autoInvoicing) {
+            await (0, jobManager_1.registerTenantJobs)(providerId, provider.name);
+        }
+        else {
+            await (0, jobManager_1.unregisterTenantJobs)(providerId);
+        }
+        return res.status(200).json(updatedProvider);
+    }
+    catch (error) {
+        console.error("Error updating billing settings:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+};
+exports.updateBillingSettings = updateBillingSettings;
+const updateDocumentsSettings = async (req, res) => {
+    const { numberPrefix, 
+    // startingNumber,
+    // includeTax,
+    // taxRate,
+    companyLogoUrl, footerMessage } = req.body;
+    const { providerId } = req.user;
+    try {
+        const provider = await prisma.provider.findUnique({
+            where: { id: providerId },
+            select: { settings: true },
+        });
+        if (!provider) {
+            return res.status(404).json({ message: "Provider not found" });
+        }
+        const currentSettings = typeof provider.settings === "object" && provider.settings !== null
+            ? provider.settings
+            : {};
+        const updatedSettings = {
+            ...currentSettings,
+            invoiceDocument: {
+                ...currentSettings?.invoiceDocument,
+                numberPrefix,
+                companyLogoUrl,
+                footerMessage
+            },
+        };
+        const updatedProvider = await prisma.provider.update({
+            where: { id: providerId },
+            data: {
+                settings: updatedSettings,
+            },
+        });
+        return res.status(200).json(updatedProvider);
+    }
+    catch (error) {
+        console.error("Error updating documents settings:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+};
+exports.updateDocumentsSettings = updateDocumentsSettings;
+//# sourceMappingURL=settingsController.js.map
