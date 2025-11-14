@@ -142,7 +142,7 @@ model Billing {
   payments     Payment[]
 
   client       Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  accounts    Accounts? @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account    Accounts? @relation(fields: [accountId], references: [id], onDelete: Cascade)
   
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt

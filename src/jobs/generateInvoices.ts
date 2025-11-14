@@ -39,9 +39,25 @@ export const generateInvoices = async (providerId: string) => {
 
     const thresholdDaysBeforeDue = settings?.billing?.invoiceGenerationDaysBeforeDue || 0;
 
-    const clients = await prisma.client.findMany({
+    // const clients = await prisma.client.findMany({
+    //   where: {
+    //     providerId,
+    //     billingDay: todayDay + thresholdDaysBeforeDue,
+    //   },
+    //   include: {
+    //     servicePlan: {
+    //         select: {
+    //             monthlyFee: true
+    //         }
+    //     }
+    //   }
+    // });
+
+    const accounts = await prisma.accounts.findMany({
       where: {
-        providerId,
+        client: {
+          providerId
+        },
         billingDay: todayDay + thresholdDaysBeforeDue,
       },
       include: {
@@ -53,7 +69,7 @@ export const generateInvoices = async (providerId: string) => {
       }
     });
 
-    if (clients.length === 0) {
+    if (accounts.length === 0) {
       console.log("No clients found for this tenant.");
       return;
     }
@@ -76,16 +92,17 @@ export const generateInvoices = async (providerId: string) => {
 
     const prefix = settings?.invoiceDocument?.numberPrefix || 'INV-';
 
-    const newInvoices = clients.map((client, index) => {
+    const newInvoices = accounts.map((account, index) => {
         const invoiceNumber = `${prefix}${today.getFullYear().toString().slice(2)}${Math.floor(Math.random()*1e10).toString().padStart(10,'0')}`;
-        const dueDate = addDays((start), (client.billingDay! - 1));
+        const dueDate = addDays((start), (account.billingDay! - 1));
         return {
         invoiceNumber,
-        clientId: client.id,
+        clientId: account.clientId,
+        accountId: account.id,
         billingDate: today,
         period,
         dueDate,
-        amount: client.servicePlan?.monthlyFee ?? 0, // assuming client has monthlyFee field
+        amount: account.servicePlan?.monthlyFee ?? 0, // assuming client has monthlyFee field
         description: `Monthly Internet Subscription for ${period}`,
       };
     });

@@ -23,8 +23,13 @@ export const checkOverdueInvoices = async() => {
 
             await prisma.billing.updateMany({
                 where: {
-                    client: {
-                        providerId: provider.id
+                    // client: {
+                    //     providerId: provider.id
+                    // },
+                    account: {
+                        client: {
+                            providerId: provider.id
+                        }
                     },
                     dueDate: {
                         lte: endUtc,

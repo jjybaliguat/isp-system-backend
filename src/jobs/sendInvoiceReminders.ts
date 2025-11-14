@@ -49,9 +49,15 @@ export async function sendInvoiceReminders(providerId: string) {
 
         const invoices = await prisma.billing.findMany({
             where: {
-                client: {
-                providerId,
-                status: "ACTIVE"
+                // client: {
+                // providerId,
+                // status: "ACTIVE"
+                // },
+                account: {
+                  client: {
+                    providerId,
+                    status: "ACTIVE"
+                  }
                 },
                 OR: [
                     { status: "PENDING" },
