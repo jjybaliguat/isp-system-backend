@@ -50,10 +50,11 @@ export const getClients = async(req: Request, res: Response) => {
             prisma.client.findMany({
                 where: whereClause,
                 include: {
-                servicePlan: true,
-                clientType: true,
-                coverage: true,
-                odpPort: true
+                    servicePlan: true,
+                    clientType: true,
+                    coverage: true,
+                    odpPort: true,
+                    accounts: true
                 },
                 orderBy: { createdAt: "desc" },
                 skip,

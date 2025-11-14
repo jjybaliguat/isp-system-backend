@@ -3,6 +3,7 @@ import {UAParser} from "ua-parser-js"
 import { getLocalDate } from "../../../utils/getTimeOffset";
 import { startOfYear, endOfYear } from "date-fns";
 import { PrismaClient } from "@prisma/client";
+import { validate as isUuid } from "uuid";
 
 const prisma = new PrismaClient();
 
@@ -64,10 +65,20 @@ export const createBilling = async (req: Request, res: Response) => {
             defaultDescription = `Bill-Period-${period}-Acc-${client.accountNumber}`
         }
 
+        const account = await prisma.accounts.findFirst({
+            where: {
+                clientId
+            },
+            select: {
+                id: true
+            }
+        })
+
         const billing = await prisma.billing.create({
             data: {
                 invoiceNumber: invoiceNumber || `${Date.now().toString().slice(-10)}`,
                 clientId,
+                accountId: account?.id!,
                 amount: amount  || client.servicePlan?.monthlyFee!,
                 dueDate: billDuedate || new Date(new Date().setDate(client.billingDay!)),
                 period,
@@ -316,34 +327,46 @@ export const getBillingById = async (req: Request, res: Response) => {
     }
 }
 
-export const getFullYearBillingById = async(req: Request, res: Response) => {
-    const {id} = req.params as {id: string}
+export const getFullYearBillingById = async (req: Request, res: Response) => {
+  const { id } = req.params as { id: string };
 
-    const year = new Date().getFullYear();
+  const year = new Date().getFullYear();
 
-    try {
-        const billings = await prisma.billing.findMany({
-            where: {
-            clientId: id,
-            billingDate: {
-                gte: startOfYear(new Date(year, 0, 1)),
-                lte: endOfYear(new Date(year, 11, 31))
-            }
-            },
-            include: {
-            payments: true
-            },
-            orderBy: {
-            billingDate: "asc"
-            }
-        });
+  if (!isUuid(id)) {
+    return res.status(400).json({ message: "Invalid client ID format (UUID required)" });
+  }
 
-        return res.status(200).json(billings)
-    } catch (error) {
-        console.log(error)
-        return res.status(500).json({message: "Internal Server Error"})
-    }
-}
+  try {
+    const accounts = await prisma.accounts.findMany({
+      where: { clientId: id },
+      select: { id: true },
+    });
+
+    const accountIds = accounts.map(a => a.id);
+
+    const billings = await prisma.billing.findMany({
+      where: {
+        accountId: { in: accountIds },
+        dueDate: {
+          gte: startOfYear(new Date(year, 0, 1)),
+          lte: endOfYear(new Date(year, 11, 31)),
+        },
+      },
+      include: {
+        payments: true,
+      },
+      orderBy: {
+        billingDate: "asc",
+      },
+    });
+
+    return res.status(200).json(billings);
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
 
 
 export const deleteBilling = async (req: Request, res: Response) => {

@@ -76,7 +76,7 @@ model Client {
 
   odpPort          OdpPort?
 
-  clientSubAccounts Accounts[]
+  accounts Accounts[]
 }
 
 model Accounts {
