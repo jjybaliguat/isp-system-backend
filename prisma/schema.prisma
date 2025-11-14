@@ -75,7 +75,40 @@ model Client {
   updatedAt        DateTime      @updatedAt
 
   odpPort          OdpPort?
+
+  clientSubAccounts Accounts[]
 }
+
+model Accounts {
+  id            String      @id @default(uuid()) @db.Uuid
+  clientId      String      @db.Uuid
+  servicePlanId String      @db.Uuid
+  clientTypeId     String?       @db.Uuid
+  coverageId       String?      @db.Uuid
+  accountNumber String      @unique
+  createdAt     DateTime    @default(now())
+  billingDay      Int?          @default(1) @db.SmallInt
+  notes            String?
+  mikrotikAccount  String?       
+  status           ClientStatus  @default(ACTIVE)
+  paymentType     PaymentType  @default(POSTPAID)
+  installationDate DateTime? 
+  address String?
+  taxStatus       TaxStatus     @default(NOT_ACTIVE)
+
+  client        Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  servicePlan   ServicePlan @relation(fields: [servicePlanId], references: [id], onDelete: Cascade)
+  clientType       ClientType?   @relation(fields: [clientTypeId], references: [id], onDelete: SetNull)
+  coverage         Coverage? @relation(fields: [coverageId], references: [id], onDelete: SetNull)
+  odpPort          OdpPort?
+
+  updatedAt     DateTime    @updatedAt
+
+  billings Billing[]
+
+  payments Payment[]
+}
+
 
 enum TaxStatus {
   ACTIVE
@@ -96,8 +129,8 @@ enum ClientStatus {
 model Billing {
   id           String    @id @default(uuid()) @db.Uuid
   invoiceNumber String
-  client       Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
   clientId     String    @db.Uuid
+  accountId  String?           @db.Uuid
   billingDate  DateTime  @default(now())
   period       String?
   dueDate      DateTime
@@ -108,6 +141,9 @@ model Billing {
 
   payments     Payment[]
 
+  client       Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  accounts    Accounts? @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }
@@ -136,6 +172,7 @@ model Payment {
   id             String     @id @default(uuid()) @db.Uuid
   billingId      String     @db.Uuid
   clientId       String     @db.Uuid
+  clientSubAccountId  String?    @db.Uuid
   amount         Decimal    @db.Decimal(10, 2)
   status         PaymentStatus @default(PENDING)
   paymentMethod  String?
@@ -151,6 +188,7 @@ model Payment {
 
   billing        Billing    @relation(fields: [billingId], references: [id], onDelete: Cascade)
   client         Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  accounts    Accounts? @relation(fields: [clientSubAccountId], references: [id], onDelete: Cascade)
 }
 
 enum PaymentStatus {
@@ -205,6 +243,7 @@ model Coverage {
   provider Provider @relation(fields: [providerId], references: [id])
   
   clients Client[]
+  accounts Accounts[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -225,6 +264,8 @@ model ServicePlan {
   providerId   String   @db.Uuid
 
   clients      Client[]
+
+  accounts Accounts[]
 }
 
 
@@ -241,6 +282,7 @@ model ClientType {
   providerId String @db.Uuid
 
   clients  Client[]
+  accounts Accounts[]
 
   @@unique([name, providerId])
 }
@@ -459,7 +501,9 @@ model OdpPort {
   odpId       String   @db.Uuid
 
   client      Client?     @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  clientId    String?     @unique @db.Uuid  
+  clientId    String?     @unique @db.Uuid
+  accountId String? @unique @db.Uuid
+  account Accounts? @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

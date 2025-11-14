@@ -218,7 +218,8 @@ export const createClient = async(req: Request, res: Response) => {
         coverageId,
         notes,
         proRatedDays,
-        createBill
+        createBill,
+        odpPortId
     } = req.body;
     
     const userId = req.user?.id
@@ -298,7 +299,33 @@ export const createClient = async(req: Request, res: Response) => {
                 servicePlan: true
             }
         })
-
+        
+        const account = await prisma.accounts.create({
+            data: {
+                clientId: client.id,
+                servicePlanId,
+                clientTypeId,
+                coverageId,
+                accountNumber,
+                billingDay: Number(billingDay),
+                notes,
+                mikrotikAccount,
+                installationDate: installDate,
+                address,
+            }
+        })
+        
+        if(odpPortId){
+            await prisma.odpPort.update({
+                where: {
+                    id: odpPortId
+                },
+                data: {
+                    clientId: client.id,
+                    accountId: account.id
+                }
+            })
+        }
         const provider = await prisma.provider.findUnique({
         where: { id: providerId },
         select: { settings: true },
@@ -342,6 +369,7 @@ export const createClient = async(req: Request, res: Response) => {
                 await prisma.billing.create({
                 data: {
                     clientId: client.id,
+                    accountId: account.id,
                     invoiceNumber,
                     billingDate: start,          // billing date = first day of month
                     dueDate: addDays(start, (client.billingDay!)),
@@ -360,6 +388,7 @@ export const createClient = async(req: Request, res: Response) => {
             await prisma.billing.create({
                 data: {
                 clientId: client.id,
+                accountId: account.id,
                 invoiceNumber,
                 billingDate: today,
                 dueDate: addDays(start, (client.billingDay! - 1)),
@@ -379,6 +408,7 @@ export const createClient = async(req: Request, res: Response) => {
             await prisma.billing.create({
                 data: {
                 clientId: client.id,
+                accountId: account.id,
                 invoiceNumber,
                 billingDate: start,
                 dueDate: addDays(start, (client.billingDay!)),
@@ -397,6 +427,7 @@ export const createClient = async(req: Request, res: Response) => {
             await prisma.billing.create({
                 data: {
                 clientId: client.id,
+                accountId: account.id,
                 invoiceNumber,
                 billingDate: today,
                 dueDate: addDays(today, (client.billingDay! - 1)),
