@@ -23,17 +23,16 @@ export async function registerTenantJobs(providerId: string, providerName: strin
     {
       key: providerId,
       type: "invoice",
-      schedule: "5 0 * * *", // every 8am
+      schedule: "0 0 * * *", // every day at 12:00 AM
       task: () => generateInvoices(providerId),
     },
     {
       key: `${providerId}-reminder`,
       type: "reminder",
-      schedule: "5 0 * * *", // 8:30am
+      schedule: "0 0 * * *", // every day at 12:00 AM
       task: () => sendInvoiceReminders(providerId),
     },
   ];
-
   // Schedule and persist
   for (const { key, schedule, task, type } of jobs) {
     const job = cron.schedule(schedule, task);

@@ -33,11 +33,13 @@ export const loginController = async (req: Request, res: Response) => {
 
         // Create secure cookie with refresh token 
         res.cookie(process.env.JWT_COOKIE_NAME!, refreshToken, {
-            httpOnly: true, //accessible only by web server 
-            secure: process.env.NODE_ENV === "production", //https
-            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", //cross-site cookie 
-            maxAge: 7 * 24 * 60 * 60 * 1000 //cookie expiry: 7days
-        })
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production", 
+            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+            domain: process.env.NODE_ENV === "production" ? ".sierracommunication.net" : undefined,
+            maxAge: 7 * 24 * 60 * 60 * 1000
+        });
+
 
         return res.status(200).json({ ...user, accessToken });
     } catch (error) {
@@ -143,7 +145,8 @@ export const logout = async (req: Request, res: Response) => {
     if (!cookies?.jwt_refresh_secret) return res.sendStatus(204) //No content
     res.clearCookie(process.env.JWT_COOKIE_NAME!, { 
         httpOnly: true, 
-        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", 
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+        domain: process.env.NODE_ENV === "production" ? ".sierracommunication.net" : undefined,
         secure: process.env.NODE_ENV === "production", 
     })
     console.log("cookie cleared")
