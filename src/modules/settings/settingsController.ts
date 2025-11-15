@@ -30,7 +30,7 @@ export const updateNotificationsSettings = async (req: Request, res: Response) =
         emailUser, 
         emailPass, 
         emailHost,
-        emailPort,
+        emailPort: Number(emailPort),
         senderName,
         invoiceReminderTemplate,
         paymentConfirmationTemplate,

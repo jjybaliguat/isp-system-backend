@@ -65,6 +65,71 @@ export const getNetworkHierarchy = async(req: Request, res: Response) => {
     }
 }
 
+export const getOdps = async(req: Request, res: Response) => {
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+    const {providerId} = req.user
+
+    try {
+        const odps = await prisma.oDP.findMany({
+            where: {
+                providerId,
+                odpCode: {
+                    contains: search,
+                    mode: "insensitive"
+                }
+            }
+        })
+
+        return res.status(200).json(odps)
+    } catch (error) {
+        console.log(error)
+        return res.status(500).json({message: "Internal Server Error"})
+    }
+}
+
+export const getOdpPorts = async(req: Request, res: Response) => {
+    const odpId = typeof req.query.odpId === "string" ? req.query.odpId.trim() : "";
+    const {providerId} = req.user
+    try {
+        const odpPorts = await prisma.odpPort.findMany({
+            where: {
+                odp: {
+                    id: odpId,
+                    providerId
+                }
+            },
+            include: {
+                odp: true
+            },
+            orderBy: {
+                portNumber: "asc"
+            }
+        })
+
+        return res.status(200).json(odpPorts)
+    } catch (error) {
+        console.log(error)
+        return res.status(500).json({message: "Internal Server Error"})
+    }
+}
+
+export const getOdpPort = async(req: Request, res: Response) => {
+    const accountId = typeof req.query.odpId === "string" ? req.query.odpId.trim() : "";
+    const {providerId} = req.user
+    try {
+        const odpPort = await prisma.odpPort.findUnique({
+            where: {
+                accountId
+            }
+        })
+
+        return res.status(200).json(odpPort)
+    } catch (error) {
+        console.log(error)
+        return res.status(500).json({message: "Internal Server Error"})
+    }
+}
+
 export const createOlt = async(req: Request, res: Response) => {
     const {providerId} = req.user
     const body = req.body

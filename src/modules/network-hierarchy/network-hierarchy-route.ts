@@ -1,10 +1,13 @@
 import {Router} from 'express'
 import { authenticateProvider } from '../../middlewares/authMiddleware'
-import { assignOdpPort, createLcp, createOdc, createOdp, createOdpPort, createOlt, createPonPort, deleteLcp, deleteOdc, deleteOdp, deleteOdpPort, deleteOlt, deletePonPort, getNetworkHierarchy, unAssignOdpPort } from './network-hierarchy-controller'
+import { assignOdpPort, createLcp, createOdc, createOdp, createOdpPort, createOlt, createPonPort, deleteLcp, deleteOdc, deleteOdp, deleteOdpPort, deleteOlt, deletePonPort, getNetworkHierarchy, getOdpPort, getOdpPorts, getOdps, unAssignOdpPort } from './network-hierarchy-controller'
 
 const router = Router()
 
 router.get("/", authenticateProvider, getNetworkHierarchy)
+router.get("/odp", authenticateProvider, getOdps)
+router.get("/odp-ports", authenticateProvider, getOdpPorts)
+router.get("/odp-port", authenticateProvider, getOdpPort)
 router.post("/olt", authenticateProvider, createOlt)
 router.post("/pon-port", authenticateProvider, createPonPort)
 router.post("/lcp", authenticateProvider, createLcp)

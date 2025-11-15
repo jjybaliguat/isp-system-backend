@@ -4,6 +4,8 @@ import { getLocalDate } from "../../../utils/getTimeOffset";
 import { startOfYear, endOfYear } from "date-fns";
 import { PrismaClient } from "@prisma/client";
 import { validate as isUuid } from "uuid";
+import { sendInvoiceReminderEmail } from "../../../jobs/sendInvoiceReminderEmail";
+import { decrypt } from "../../../utils/hasher";
 
 const prisma = new PrismaClient();
 
@@ -532,5 +534,153 @@ export const confirmPayment =  async (req: Request, res: Response) => {
     } catch (error) {
         console.log(error)
         return res.status(500).json({message: "Internal Server Error"})
+    }
+}
+
+export const sendEmailReminder = async(req: Request, res: Response) => {
+    const {providerId} = req.user
+    const {id} = req.params as {id: string}
+
+    if (!isUuid(id)) {
+        return res.status(400).json({ message: "Invalid Billing ID format (UUID required)" });
+    }
+    
+    try {
+        const billing = await prisma.billing.findUnique({
+            where: {
+                id
+            },
+            include: {
+                account: {
+                    include: {
+                        client: true
+                    }
+                }
+            }
+        })
+        const provider = await prisma.provider.findUnique({
+            where: {
+                id: providerId
+            },
+            select: {
+                settings: true
+            }
+        })
+
+        const settings = provider?.settings as {
+            notifications?: {
+                enabled: boolean;
+                emailUser?: string;
+                emailPass?: string;
+                emailHost?: string;
+                senderName?: string;
+                emailPort?: number;
+                invoiceReminderTemplate?: string;
+            };
+            } | undefined;
+
+            if (
+            !settings?.notifications ||
+            settings.notifications.emailUser == null ||
+            settings.notifications.emailPass == null ||
+            settings.notifications.emailHost == null ||
+            settings.notifications.senderName == null ||
+            settings.notifications.emailPort == null ||
+            settings.notifications.invoiceReminderTemplate == null
+            ) {
+            return res
+                .status(400)
+                .json({ message: "Email notification settings are incomplete." });
+            }
+
+        const clientEmail = billing?.account?.client.email || ''
+        
+        await sendInvoiceReminderEmail(
+            settings.notifications.invoiceReminderTemplate,
+            {
+                emailHost: settings.notifications.emailHost,
+                emailPass: settings.notifications.emailPass,
+                emailUser: settings.notifications.emailUser,
+                emailPort: settings.notifications.emailPort,
+                senderName: settings.notifications.senderName
+            },
+            clientEmail,
+            "Billing Reminder",
+            {
+                clientName: billing?.account?.client.fullName!,
+                invoiceNumber: billing?.invoiceNumber!,
+                amount: billing?.amount!,
+                dueDate: billing?.dueDate.toLocaleDateString()!,
+                paymentUrl: `http://localhost:3000/checkout/payment/${billing?.id}`
+              }
+        )
+
+        return res.status(200).json({message: "Billing reminder sent"})
+    } catch (error) {
+        console.log(error)
+        return res.status(500).json({message: "Internal Server Error"})
+    }
+}
+
+export const sendSmsReminder = async(req: Request, res: Response) => {
+    const {providerId} = req.user
+    const {id} = req.params as {id: string}
+
+    if (!isUuid(id)) {
+        return res.status(400).json({ message: "Invalid Billing ID format (UUID required)" });
+    }
+
+    try {
+        const provider = await prisma.provider.findUnique({
+            where: {
+                id: providerId
+            },
+            select: {
+                semaphoreApiKey: true,
+                companyName: true
+            }
+        })
+
+        const billing = await prisma.billing.findUnique({
+            where: { id },
+            select: {
+                invoiceNumber: true,
+                amount: true,
+                dueDate: true,
+                account: {
+                    select: {
+                        accountNumber: true,
+                        client: {
+                        select: {
+                            phoneNumber: true,
+                            fullName: true,
+                        },
+                        },
+                    },
+                },
+            },
+        });
+
+        const decryptedKey = decrypt(provider?.semaphoreApiKey!)
+        const message = `
+            Internet Payment reminder invoice ${billing?.invoiceNumber} for account ${billing?.account?.accountNumber} amounting to ₱${billing?.amount} is due on ${new Date(billing?.dueDate!).toLocaleDateString("en-PH")}.
+            Please settle your payment to avoid service interruption.
+            – ${provider?.companyName}
+        `.trim();
+
+        const response: any = await fetch(`https://api.semaphore.co/api/v4/messages?apikey=${decryptedKey}&number=${billing?.account?.client.phoneNumber}&message=${message}`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            }
+        })
+
+        const data = await response.json()
+
+        if(data.apikey) return res.status(400).json({message: "Invalid SMS Api Key"})
+
+        return res.status(200).json({message: "Message sent"})
+    } catch (error) {
+        
     }
 }

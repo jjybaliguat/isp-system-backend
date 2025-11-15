@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { confirmPayment, createBilling, createBillingForAccount, deleteBilling, getBillingByAccountNumber, getBillingById, getBillings, getFullYearBillingById } from "../controller/billingController";
+import { confirmPayment, createBilling, createBillingForAccount, deleteBilling, getBillingByAccountNumber, getBillingById, getBillings, getFullYearBillingById, sendEmailReminder, sendSmsReminder } from "../controller/billingController";
 import { authenticateProvider } from "../../../middlewares/authMiddleware";
 
 const router = Router();
@@ -7,6 +7,8 @@ const router = Router();
 router.post('/', authenticateProvider, createBilling)
 router.post('/v2', authenticateProvider, createBillingForAccount)
 router.post('/:id/confirm-payment', authenticateProvider, confirmPayment)
+router.post('/send-email-reminder/:id', authenticateProvider, sendEmailReminder)
+router.post('/send-sms-reminder/:id', authenticateProvider, sendSmsReminder)
 router.get('/', authenticateProvider, getBillings)
 router.get('/get-fullyear-billing/:id', authenticateProvider, getFullYearBillingById)
 router.get('/get-bills/:accountNumber', getBillingByAccountNumber)

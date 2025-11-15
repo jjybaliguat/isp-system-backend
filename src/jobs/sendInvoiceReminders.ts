@@ -31,6 +31,7 @@ export async function sendInvoiceReminders(providerId: string) {
         emailPass: string,
         emailHost: string,
         senderName: string,
+        emailPort: number,
         invoiceReminderTemplate: string
       }
     } | undefined;
@@ -88,7 +89,7 @@ export async function sendInvoiceReminders(providerId: string) {
                         emailHost: settings.notifications.emailHost,
                         emailUser: settings.notifications.emailUser,
                         emailPass: settings.notifications.emailPass,
-                        emailPort: 587,
+                        emailPort: settings.notifications.emailPort,
                         senderName: settings.notifications.senderName
                       }, 
                       invoice.client.email, "Billing Reminder", 
