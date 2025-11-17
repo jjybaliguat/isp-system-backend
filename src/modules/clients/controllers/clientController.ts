@@ -101,6 +101,98 @@ export const getClients = async(req: Request, res: Response) => {
     }
 }
 
+export const getAccounts = async(req: Request, res: Response) => {
+    const { id: userId, providerId } = req.user;
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 10;
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+    // console.log(search)
+    const coverageId =
+    typeof req.query.coverageId === "string" && req.query.coverageId !== "All"
+      ? req.query.coverageId
+      : undefined;
+
+    const status =
+    typeof req.query.status === "string" && req.query.status !== "All"
+      ? req.query.status
+      : undefined;
+
+    if (!providerId) {
+        return res.status(401).json({ message: "Provider ID not found in token" });
+    }
+
+    const skip = (page - 1) * limit;
+
+    try {
+        const whereClause: any = {
+        client: {
+            providerId
+        },
+        ...(coverageId && {coverageId}),
+        ...(status && { status }),
+        ...(search && {
+            OR: [
+            { client: { fullName: { contains: search, mode: "insensitive" } } },
+            { client: { email: { contains: search, mode: "insensitive" } } },
+            { client: { phoneNumber: { contains: search, mode: "insensitive" } } },
+            { accountNumber: { contains: search, mode: "insensitive" } },
+            ]
+        }),
+        };
+
+
+        // Query + total count in parallel
+        const [accounts, total] = await Promise.all([
+            prisma.accounts.findMany({
+                where: whereClause,
+                include: {
+                    servicePlan: true,
+                    clientType: true,
+                    coverage: true,
+                    odpPort: true,
+                    client: {
+                        include: {
+                            servicePlan: {
+                                select: {
+                                    name: true,
+                                    monthlyFee: true
+                                }
+                            },
+                            coverage: {
+                                select: {
+                                    name: true
+                                }
+                            },
+                            odpPort: {
+                                include: {
+                                    odp: true
+                                }
+                            }
+                        }
+                    }
+                },
+                orderBy: { createdAt: "desc" },
+                skip,
+                take: limit,
+            }),
+            prisma.accounts.count({ where: whereClause }),
+        ]);
+
+        return res.status(200).json({
+        data: accounts,
+        pagination: {
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+        },
+        });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: "Internal Server Error" });
+    }
+}
+
 export const getClientsAnalytics = async(req: Request, res: Response) => {
     const {id: userId, providerId} = req.user;
 

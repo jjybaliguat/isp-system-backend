@@ -66,6 +66,17 @@ export const getPayments = async(req: Request, res: Response) => {
                 accountNumber: true,
                 },
             },
+            account: {
+              include: {
+                  client: {
+                    select: {
+                    id: true,
+                    fullName: true,
+                    accountNumber: true,
+                  },
+                },
+              }
+            },
             billing: {
               select: {
                 id: true,

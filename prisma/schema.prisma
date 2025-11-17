@@ -188,7 +188,7 @@ model Payment {
 
   billing        Billing    @relation(fields: [billingId], references: [id], onDelete: Cascade)
   client         Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  accounts    Accounts? @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account   Accounts? @relation(fields: [accountId], references: [id], onDelete: Cascade)
 }
 
 enum PaymentStatus {

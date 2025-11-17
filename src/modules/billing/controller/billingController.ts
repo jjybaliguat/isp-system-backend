@@ -265,23 +265,44 @@ export const getBillings = async (req: Request, res: Response) => {
         prisma.billing.findMany({
             where: whereClause,
             include: {
-            client: {
-                select: {
-                id: true,
-                fullName: true,
-                accountNumber: true,
-                provider: {
-                    select: {
-                        settings: true,
-                        companyName: true,
-                        companyAddress: true,
-                        companyLogoUrl: true,
-                        email: true,
-                        phoneNumber: true
+                account: {
+                    include: {
+                        client: {
+                            select: {
+                                id: true,
+                                fullName: true,
+                                accountNumber: true,
+                                provider: {
+                                    select: {
+                                        settings: true,
+                                        companyName: true,
+                                        companyAddress: true,
+                                        companyLogoUrl: true,
+                                        email: true,
+                                        phoneNumber: true
+                                    }
+                                }
+                            },
+                        },
                     }
-                }
                 },
-            },
+                client: {
+                    select: {
+                    id: true,
+                    fullName: true,
+                    accountNumber: true,
+                    provider: {
+                        select: {
+                            settings: true,
+                            companyName: true,
+                            companyAddress: true,
+                            companyLogoUrl: true,
+                            email: true,
+                            phoneNumber: true
+                        }
+                    }
+                    },
+                },
             },
             orderBy: { billingDate: "desc" },
             skip,
