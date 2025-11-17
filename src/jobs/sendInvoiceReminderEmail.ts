@@ -49,9 +49,7 @@ export async function sendInvoiceReminderEmail(
       subject,
       html: htmlBody,
     });
-
-    console.log("✅ Email sent successfully to", recipient);
-  } catch (error) {
+  } catch (error: any) {
     console.error("❌ Failed to send email:", error);
   }
 }

@@ -1,11 +1,12 @@
 import { Request, Response } from "express";
 import {UAParser} from "ua-parser-js"
 import { getLocalDate } from "../../../utils/getTimeOffset";
-import { startOfYear, endOfYear } from "date-fns";
+import { startOfYear, endOfYear, formatDate } from "date-fns";
 import { PrismaClient } from "@prisma/client";
 import { validate as isUuid } from "uuid";
 import { sendInvoiceReminderEmail } from "../../../jobs/sendInvoiceReminderEmail";
 import { decrypt } from "../../../utils/hasher";
+import { sendPaymentConfirmation } from "../../../jobs/sendPaymentConfirmation";
 
 const prisma = new PrismaClient();
 
@@ -421,121 +422,173 @@ export const deleteBilling = async (req: Request, res: Response) => {
     }
 }
 
-export const confirmPayment =  async (req: Request, res: Response) => {
-    const {id} = req.params as {id: string}
-    const {
+export const confirmPayment = async (req: Request, res: Response) => {
+  const { id } = req.params as { id: string };
+  const {
+    amount,
+    paymentDate,
+    paymentMethod,
+    referenceNumber,
+    remarks,
+    sendReceipt,
+  } = req.body;
+
+  const { id: userId, providerId } = req.user as {
+    id: string;
+    providerId: string;
+  };
+
+  // ---- VALIDATIONS ----
+  if (!amount || !paymentDate || !paymentMethod || !referenceNumber) {
+    return res.status(400).json({ message: "Missing required fields" });
+  }
+
+  const payDate = new Date(paymentDate);
+  if (isNaN(payDate.getTime())) {
+    return res.status(400).json({ message: "Invalid payment date" });
+  }
+
+  // Parse user agent
+  const ua = UAParser(req.headers["user-agent"] || "");
+  const deviceInfo = `${ua.browser.name || "Browser"} on ${
+    ua.os.name || "OS"
+  } (${ua.device.model || "Desktop"}) from ${req.socket.remoteAddress}`;
+
+  try {
+    // Pull user + bill in parallel
+    const [user, bill] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          employee: true,
+          provider: { select: { name: true, settings: true } },
+        },
+      }),
+
+      prisma.billing.findUnique({
+        where: { id },
+        include: {
+          client: true,
+          account: { include: { client: true } },
+        },
+      }),
+    ]);
+
+    if (!bill)
+      return res.status(404).json({ message: `Bill with id ${id} not found` });
+
+    // Check reference number
+    const isPaymentExists = await prisma.payment.findFirst({
+      where: {
+        referenceId: referenceNumber,
+        client: { providerId },
+      },
+    });
+
+    if (isPaymentExists)
+      return res.status(400).json({ message: "Reference number already exists" });
+
+    // ---- CREATE PAYMENT ----
+    const payment = await prisma.payment.create({
+      data: {
+        billingId: id,
+        clientId: bill.clientId,
+        accountId: bill.accountId,
         amount,
-        paymentDate,
+        status: "PAID",
         paymentMethod,
-        referenceNumber,
-        remarks
-    } = req.body
-    const {id: userId, providerId} = req.user as {id: string, providerId: string}
+        paymentChannel: paymentMethod,
+        recordedBy: `Recorded By ${user?.employee?.fullName || user?.provider.name}`,
+        referenceId: referenceNumber,
+        remarks,
+        paidAt: payDate,
+      },
+    });
 
-    const ip = req.socket.remoteAddress
+    // ---- UPDATE BILL ----
+    const newStatus =
+      amount === 0
+        ? "PENDING"
+        : amount + bill.paidAmount < bill.amount
+        ? "PARTIALLY_PAID"
+        : "PAID";
 
-    const ua = UAParser(req.headers["user-agent"] || "")
-    const browser = ua.browser.name || "Unknown Browser"
-    const os = ua.os.name || "Unknown OS"
-    const device = ua.device.model || "Desktop"
+    const updatedBill = await prisma.billing.update({
+      where: { id },
+      data: {
+        status: newStatus,
+        paidAmount: { increment: amount },
+      },
+    });
 
-    const deviceInfo = `${browser} on ${os} (${device}) from ${ip}`
+    // ---- LOG ACTION (non-blocking) ----
+    prisma.log
+      .create({
+        data: {
+          action: "Confirm Payment",
+          entity: "Billing",
+          userId,
+          message: `Pay bills ${bill.client.fullName}(${bill.client.accountNumber}) Period ${bill.period} recorded from ${deviceInfo}`,
+          providerId,
+        },
+      })
+      .catch(console.error);
+    
+    const settings =  user?.provider?.settings as {
+            notifications?: {
+                enabled: boolean;
+                emailUser?: string;
+                emailPass?: string;
+                emailHost?: string;
+                senderName?: string;
+                emailPort?: number;
+                paymentConfirmationTemplate?: string;
+            };
+            } | undefined;
 
-    if(!amount || !paymentDate || !paymentMethod || !referenceNumber){
-        return res.status(400).json({message: "Missing required fields"})
-    }
+    const emailIsConfigured =
+      settings &&
+      settings.notifications?.enabled &&
+      settings.notifications?.emailHost &&
+      settings.notifications?.emailPass &&
+      settings.notifications?.emailUser &&
+      settings.notifications?.senderName &&
+      settings.notifications?.emailPort &&
+      settings.notifications?.paymentConfirmationTemplate;
 
-    const payDate = new Date(paymentDate);
-
-    if(isNaN(payDate.getTime())){
-        return res.status(400).json({message: "Payment Date is is not a valid date"})
-    }
-
-    try {
-        const user = await prisma.user.findUnique(
-            {
-                where: {id: userId},
-                include: {
-                employee: true,
-                provider: {
-                    select: {
-                        name: true
-                    }
-                }
-            }
-            }
+    if (sendReceipt && emailIsConfigured) {
+      setImmediate(() =>
+        sendPaymentConfirmation(
+          settings.notifications?.paymentConfirmationTemplate!,
+          {
+            emailHost: settings.notifications?.emailHost!,
+            emailPass: settings.notifications?.emailPass!,
+            emailUser: settings.notifications?.emailUser!,
+            emailPort: settings.notifications?.emailPort!,
+            senderName: settings.notifications?.senderName!,
+          },
+          bill.account?.client.email!,
+          "Payment Confirmation",
+          {
+            clientName: bill.account?.client.fullName!,
+            invoiceNumber: bill.invoiceNumber,
+            amount: bill.amount,
+            paymentDate: formatDate(payDate, "MMMM-dd-yyyy"),
+            paymentMethod,
+            receiptUrl: `https://sierracommunication.net/invoice/${payment.id}`,
+          }
         )
-        const bill = await prisma.billing.findUnique({
-            where: {
-                id
-            },
-            include: {
-                client: true
-            }
-        })
-
-        if(!bill) return res.status(400).json({message: `Bill with id ${id} not found`})
-
-        const isPaymentExists = await prisma.payment.findFirst({
-            where: {
-                referenceId: referenceNumber,
-                client: {
-                    providerId
-                }
-            },
-        })
-
-        if(isPaymentExists) return res.status(400).json({message: "Reference number already exists"})
-
-        await prisma.payment.create({
-            data: {
-                billingId: id,
-                clientId: bill.clientId,
-                accountId: bill.accountId,
-                amount,
-                status: "PAID",
-                paymentMethod,
-                paymentChannel: paymentMethod,
-                recordedBy: `Recorded By ${user?.employee?.fullName || user?.provider.name || 'Unknown'}`,
-                referenceId: referenceNumber,
-                remarks,
-                paidAt: payDate
-            }
-        })
-
-        const billStatus = amount == 0 ? "PENDING" : (amount + bill.paidAmount) < bill.amount ? "PARTIALLY_PAID" : "PAID"
-
-        const updatedBill = await prisma.billing.update({
-            where: {
-                id
-            },
-            data: {
-                status: billStatus,
-                paidAmount: {
-                    increment: amount
-                }
-            }
-        })
-        
-
-        // implement sending receipt to client
-
-        await prisma.log.create({
-            data: {
-                action: "Confirm Payment",
-                entity: "Billing",
-                userId: userId,
-                message: `Pay bills ${bill.client.fullName}(${bill.client.accountNumber}) Period ${bill.period} recorded from ${deviceInfo}`,
-                providerId
-            }
-        })
-
-        return res.status(200).json(updatedBill)
-    } catch (error) {
-        console.log(error)
-        return res.status(500).json({message: "Internal Server Error"})
+      );
     }
-}
+
+    // ---- FAST RESPONSE ----
+    return res.status(200).json(updatedBill);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
 
 export const sendEmailReminder = async(req: Request, res: Response) => {
     const {providerId} = req.user
@@ -595,7 +648,8 @@ export const sendEmailReminder = async(req: Request, res: Response) => {
 
         const clientEmail = billing?.account?.client.email || ''
         
-        await sendInvoiceReminderEmail(
+        
+        sendInvoiceReminderEmail(
             settings.notifications.invoiceReminderTemplate,
             {
                 emailHost: settings.notifications.emailHost,

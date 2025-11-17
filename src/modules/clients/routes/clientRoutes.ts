@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createAccount, createClient, deleteClient, getClientById, getClients, getClientsAnalytics, getClientsCount, getClientsPhoneNumbers, updateClient, updateClientAccount } from "../controllers/clientController";
+import { createAccount, createClient, deleteClient, deleteClientAccount, getClientById, getClients, getClientsAnalytics, getClientsCount, getClientsPhoneNumbers, updateClient, updateClientAccount } from "../controllers/clientController";
 import { authenticateProvider } from "../../../middlewares/authMiddleware";
 
 const router = Router();
@@ -12,6 +12,7 @@ router.get("/phoneNumbers/get", authenticateProvider, getClientsPhoneNumbers)
 router.post("/", authenticateProvider, createClient)
 router.post("/account", authenticateProvider, createAccount)
 router.patch("/account/:id", authenticateProvider, updateClientAccount)
+router.delete("/account/:id", authenticateProvider, deleteClientAccount)
 router.patch("/:id", authenticateProvider, updateClient)
 router.delete("/:id", authenticateProvider, deleteClient)
 

@@ -547,10 +547,11 @@ export const createAccount = async(req: Request, res: Response) => {
 
         return res.status(400).json({ ...errors });
     }
-
     try {
-        const account = await prisma.accounts.create({
-            data: {
+        const result = await prisma.$transaction(async (tx) => {
+            // 1. Create account
+            const account = await tx.accounts.create({
+                data: {
                 clientId,
                 address,
                 installationDate: installDate,
@@ -560,27 +561,68 @@ export const createAccount = async(req: Request, res: Response) => {
                 clientTypeId,
                 coverageId,
                 billingDay: Number(billingDay),
-                notes
-            },
-            include: {
-                clientType: true,
-                servicePlan: true,
-                client: true
-            }
-        })
-
-        
-        if(odpPortId && odpPortId !== ""){
-            await prisma.odpPort.update({
-                where: {
-                    id: odpPortId
+                notes,
                 },
+                include: {
+                servicePlan: {
+                    select: {
+                    name: true,
+                    monthlyFee: true,
+                    },
+                },
+                coverage: {
+                    select: {
+                    name: true,
+                    },
+                },
+                clientType: true,
+                client: true,
+                odpPort: {
+                    include: {
+                    odp: true,
+                    },
+                },
+                },
+            });
+
+            // 2. Assign ODP Port if provided
+            if (odpPortId && odpPortId !== "") {
+                await tx.odpPort.update({
+                where: { id: odpPortId },
                 data: {
                     accountId: account.id,
-                    status: "OCCUPIED"
-                }
-            })
-        }
+                    status: "OCCUPIED",
+                },
+                });
+            }
+
+            // 3. Return updated account with latest ODP port
+            const updatedAccount = await tx.accounts.findUnique({
+                where: { id: account.id },
+                include: {
+                servicePlan: {
+                    select: {
+                    name: true,
+                    monthlyFee: true,
+                    },
+                },
+                coverage: {
+                    select: {
+                    name: true,
+                    },
+                },
+                clientType: true,
+                client: true,
+                odpPort: {
+                    include: {
+                    odp: true,
+                    },
+                },
+                },
+            });
+
+            return updatedAccount;
+            });
         const provider = await prisma.provider.findUnique({
         where: { id: providerId },
         select: { settings: true },
@@ -600,7 +642,7 @@ export const createAccount = async(req: Request, res: Response) => {
             }
         | undefined;
 
-        if(createBill) {
+        if(createBill && result) {
         // Fetch monthly payment from service plan
         const servicePlan = await prisma.servicePlan.findUnique({ where: { id: servicePlanId } });
         if(!servicePlan) throw new Error("Service plan not found");
@@ -623,14 +665,14 @@ export const createAccount = async(req: Request, res: Response) => {
 
                 await prisma.billing.create({
                 data: {
-                    clientId: account.clientId,
-                    accountId: account.id,
+                    clientId: result?.clientId!,
+                    accountId: result?.id!,
                     invoiceNumber,
                     billingDate: start,          // billing date = first day of month
-                    dueDate: addDays(start, (account.billingDay!)),
+                    dueDate: addDays(start, (result?.billingDay!)),
                     period,
                     amount: monthlyPayment,
-                    description: `Monthly bill for ${billMonth.toLocaleString("default", { month: "long" })}-Acc-${account.accountNumber}`
+                    description: `Monthly bill for ${billMonth.toLocaleString("default", { month: "long" })}-Acc-${result?.accountNumber!}`
                 }
                 });
             }
@@ -642,14 +684,14 @@ export const createAccount = async(req: Request, res: Response) => {
             const invoiceNumber = `${prefix}${today.getFullYear().toString().slice(2)}${Math.floor(Math.random()*1e10).toString().padStart(10,'0')}`;
             await prisma.billing.create({
                 data: {
-                clientId: account.clientId,
-                accountId: account.id,
+                clientId: result?.clientId!,
+                accountId: result?.id!,
                 invoiceNumber,
                 billingDate: today,
-                dueDate: addDays(start, (account.billingDay! - 1)),
+                dueDate: addDays(start, (result?.billingDay! - 1)),
                 period,
                 amount: monthlyPayment,
-                description: `Monthly bill for ${start.toLocaleString("default", { month: "long" })}-Acc-${account.accountNumber}`
+                description: `Monthly bill for ${start.toLocaleString("default", { month: "long" })}-Acc-${result?.accountNumber!}`
                 }
             });
             break;
@@ -662,14 +704,14 @@ export const createAccount = async(req: Request, res: Response) => {
             const invoiceNumber = `${prefix}${today.getFullYear().toString().slice(2)}${Math.floor(Math.random()*1e10).toString().padStart(10,'0')}`;
             await prisma.billing.create({
                 data: {
-                clientId: account.clientId,
-                accountId: account.id,
+                clientId: result?.clientId,
+                accountId: result?.id,
                 invoiceNumber,
                 billingDate: start,
-                dueDate: addDays(start, (account.billingDay!)),
+                dueDate: addDays(start, (result?.billingDay!)),
                 period,
                 amount: monthlyPayment,
-                description: `Monthly bill for ${nextMonth.toLocaleString("default", { month: "long" })}-Acc-${account.accountNumber}`
+                description: `Monthly bill for ${nextMonth.toLocaleString("default", { month: "long" })}-Acc-${result?.accountNumber}`
                 }
             });
             break;
@@ -681,14 +723,14 @@ export const createAccount = async(req: Request, res: Response) => {
             const invoiceNumber = `${prefix}${today.getFullYear().toString().slice(2)}${Math.floor(Math.random()*1e10).toString().padStart(10,'0')}`;
             await prisma.billing.create({
                 data: {
-                clientId: account.clientId,
-                accountId: account.id,
+                clientId: result?.clientId,
+                accountId: result?.id,
                 invoiceNumber,
                 billingDate: today,
-                dueDate: addDays(today, (account.billingDay! - 1)),
+                dueDate: addDays(today, (result?.billingDay! - 1)),
                 period,
                 amount,
-                description: `ProRated bill for ${proRatedDays} days Acc-${account.accountNumber}`
+                description: `ProRated bill for ${proRatedDays} days Acc-${result?.accountNumber}`
                 }
             });
             break;
@@ -713,10 +755,10 @@ export const createAccount = async(req: Request, res: Response) => {
             entity: 'Client',
             userId: userId,
             providerId: providerId,
-            message: `New Account for client ${account.client.fullName} created by user ${user?.employee?.fullName || user?.provider.name || 'Unknown'} ${createBill? `with created bill ${createBill}` : ""}`
+            message: `New Account for client ${result?.client.fullName} created by user ${user?.employee?.fullName || user?.provider.name || 'Unknown'} ${createBill? `with created bill ${createBill}` : ""}`
         });
 
-        res.status(201).json(account);
+        res.status(201).json(result);
     } catch (error) {
         console.log(error);
         res.status(500).json({ error: 'Internal Server Error' });
@@ -747,46 +789,100 @@ export const updateClientAccount = async(req: Request, res: Response) => {
     }
     
     try {
-        const existingAccount = await prisma.accounts.findUnique({
-            where: { id },
-            include: { odpPort: true },
-        });
+        const updatedAccount = await prisma.$transaction(async (tx) => {
+            const existingAccount = await tx.accounts.findUnique({
+                where: { id },
+                include: { odpPort: true },
+            });
 
-        // Update the account first
-        const updateClientAccount = await prisma.accounts.update({
-        where: { id },
-        data: {
-            address,
-            mikrotikAccount,
-            billingDay: Number(billingDay),
-            notes,
-            installationDate: installDate,
-            servicePlan: { connect: { id: servicePlanId } },
-            ...(clientTypeId && { clientType: { connect: { id: clientTypeId } } }),
-            ...(coverageId && { coverage: { connect: { id: coverageId } } }),
-            ...(odpPortId && { odpPort: { connect: { id: odpPortId } } }),
-        },
-        });
+            if (!existingAccount) throw new Error("Account not found");
 
-        // Handle ODP port statuses
-        if (odpPortId) {
-            // If there’s an existing port and it’s different from the new one, mark old port as AVAILABLE
-            if (existingAccount?.odpPort && existingAccount.odpPort.id !== odpPortId) {
-                await prisma.odpPort.update({
-                    where: { id: existingAccount.odpPort.id },
-                    data: { status: "AVAILABLE" },
-                });
+            const account = await tx.accounts.update({
+                where: { id },
+                data: {
+                address,
+                mikrotikAccount,
+                billingDay: Number(billingDay),
+                notes,
+                installationDate: installDate,
+                servicePlan: { connect: { id: servicePlanId } },
+                ...(clientTypeId && { clientType: { connect: { id: clientTypeId } } }),
+                ...(coverageId && { coverage: { connect: { id: coverageId } } }),
+                ...(odpPortId && { odpPort: { connect: { id: odpPortId } } }),
+                },
+                include: {
+                    servicePlan: { select: { name: true, monthlyFee: true } },
+                    coverage: { select: { name: true } },
+                    clientType: true,
+                    client: true,
+                    odpPort: { include: { odp: true } },
+                },
+            });
+
+            if (odpPortId) {
+                const portUpdates = [];
+
+                if (existingAccount.odpPort && existingAccount.odpPort.id !== odpPortId) {
+                    portUpdates.push(
+                        tx.odpPort.update({
+                        where: { id: existingAccount.odpPort.id },
+                        data: { status: "AVAILABLE", accountId: null },
+                        })
+                    );
+                }
+
+                portUpdates.push(
+                    tx.odpPort.update({
+                        where: { id: odpPortId },
+                        data: { status: "OCCUPIED", accountId: account.id },
+                    })
+                );
+
+                await Promise.all(portUpdates);
             }
 
-            // Always mark the new port as OCCUPIED
-            await prisma.odpPort.update({
-                where: { id: odpPortId },
-                data: { status: "OCCUPIED" },
+            return account;
             });
+
+
+
+        return res.status(200).json(updatedAccount)
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+}
+
+export const deleteClientAccount = async(req: Request, res: Response) => {
+    const {id} = req.params as {id: string}
+    try {
+        const account = await prisma.accounts.findUnique({
+            where: {
+                id
+            },
+            include: {
+                odpPort: true
+            }
+        })
+
+        await prisma.accounts.delete({
+            where: {
+                id
+            }
+        })
+
+        if(account?.odpPort){
+            await prisma.odpPort.update({
+                where: {
+                    id: account.odpPort.id
+                },
+                data: {
+                    status: "AVAILABLE"
+                }
+            })
         }
 
-
-        return res.status(200).json(updateClientAccount)
+        return res.status(200).json({message: "Client account deleted successfully"})
     } catch (error) {
         console.log(error);
         res.status(500).json({ error: 'Internal Server Error' });
@@ -857,7 +953,36 @@ export const updateClient = async(req: Request, res: Response) => {
                 clientTypeId: clientTypeId || existingClient.clientTypeId,
                 coverageId: coverageId || existingClient.coverageId,
                 terminationDate: status === "TERMINATED" ? new Date() : null
-            }
+            },
+            include: {
+                    servicePlan: true,
+                    clientType: true,
+                    coverage: true,
+                    odpPort: true,
+                    accounts: {
+                        include: {
+                            servicePlan: {
+                                select: {
+                                    name: true,
+                                    monthlyFee: true
+                                }
+                            },
+                            coverage: {
+                                select: {
+                                    name: true
+                                }
+                            },
+                            odpPort: {
+                                include: {
+                                    odp: true
+                                }
+                            }
+                        },
+                        orderBy: {
+                            createdAt: "desc"
+                        }
+                    }
+                },
         })
 
         logTransaction({
