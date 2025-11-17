@@ -119,7 +119,15 @@ export const refresh = asyncHandler( async (req: any, res: any)=> {
     const refreshToken = cookies.jwt_refresh_secret
 
   jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET!, async (err: any, decoded: any) => {
-    if (err) return res.status(403).json({ message: "Forbidden" });
+    if (err) {
+        res.clearCookie(process.env.JWT_COOKIE_NAME!, { 
+            httpOnly: true, 
+            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+            domain: process.env.NODE_ENV === "production" ? ".sierracommunication.net" : undefined,
+            secure: process.env.NODE_ENV === "production", 
+        })
+        return res.status(403).json({ message: "Forbidden" });
+    }
 
     const foundUser = await prisma.user.findUnique({
       where: { email: decoded.email },
