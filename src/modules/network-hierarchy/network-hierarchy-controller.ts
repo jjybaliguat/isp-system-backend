@@ -19,42 +19,47 @@ export const getNetworkHierarchy = async(req: Request, res: Response) => {
                     lcps: {
                     include: {
                         odcs: {
-                        include: {
-                            odps: {
+                            include: {
+                                odps: {
+                                    include: {
+                                        ports: {
+                                        include: {
+                                            client: true,
+                                            account: {
+                                                include: {
+                                                    client: true
+                                                }
+                                            }
+                                        },
+                                        orderBy: {
+                                            portNumber: 'asc'
+                                        }
+                                        }
+                                    },
+                                },
+                            }
+                        },
+                        odps: {
                             include: {
                                 ports: {
                                 include: {
                                     client: true,
+                                    account: {
+                                        include: {
+                                            client: true
+                                        }
+                                    }
                                 },
                                 orderBy: {
                                     portNumber: 'asc'
                                 }
                                 }
                             },
-                            },
-                        },
                         },
                     },
                     },
                 },
-                },
-                lcps: {
-                include: {
-                    odcs: {
-                    include: {
-                        odps: {
-                        include: {
-                            ports: {
-                            include: {
-                                client: true,
-                            },
-                            }
-                        },
-                        },
-                    },
-                    },
-                },
-                },
+                }
             },
             })
 
@@ -252,15 +257,29 @@ export const createOdp = async(req: Request, res: Response) => {
     const {providerId} = req.user
     const body = req.body
     const {latitude, longitude, portCount} = body
+    const {odcId, lcpId} = body
 
     const lat = Number(latitude);
     const lng = Number(longitude);
     const count = Number(portCount);
 
     try {
+        const lcp = await prisma.lCP.findUnique({
+            where: {
+                id: lcpId
+            }
+        })
+        const odc = await prisma.oDC.findUnique({
+            where: {
+                id: odcId
+            }
+        })
+        
         const odp = await prisma.oDP.create({
             data: {
                 ...body,
+                odcId: odc? odc.id : undefined,
+                lcpId: lcp? lcp.id : undefined,
                 latitude: lat,
                 longitude: lng,
                 portCount: count,
@@ -344,14 +363,15 @@ export const assignOdpPort = async(req: Request, res: Response) => {
 }
 
 export const unAssignOdpPort = async(req: Request, res: Response) => {
-    const {clientId} = req.body
+    const {accountId} = req.body
     try {
         await prisma.odpPort.update({
             where: {
-                clientId
+                accountId
             },
             data: {
                 clientId: null,
+                accountId: null,
                 status: "AVAILABLE"
             }
         })

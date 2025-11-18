@@ -446,13 +446,14 @@ model LCP {
   providerId  String    @db.Uuid
 
   odcs        ODC[]
+  odps        ODP[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 }
 
 model ODC {
   id          String   @id @default(uuid()) @db.Uuid
-  name        String
+  name        String?
   cabinetCode String?  @unique
   location    String?
   latitude    Float?
@@ -472,7 +473,7 @@ model ODC {
 
 model ODP {
   id          String   @id @default(uuid()) @db.Uuid
-  name        String
+  // name        String
   odpCode     String?  @unique
   portCount   Int      @default(8)
   location    String?
@@ -480,8 +481,10 @@ model ODP {
   longitude   Float?
   remarks     String?
 
-  odc         ODC      @relation(fields: [odcId], references: [id], onDelete: Cascade)
-  odcId       String   @db.Uuid
+  odc         ODC?      @relation(fields: [odcId], references: [id], onDelete: Cascade)
+  odcId       String?   @db.Uuid
+  lcpId       String? @db.Uuid
+  lcp         LCP? @relation(fields: [lcpId], references: [id], onDelete: Cascade)
 
   provider    Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
   providerId  String   @db.Uuid
