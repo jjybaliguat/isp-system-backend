@@ -6,100 +6,134 @@ import { validate as isUuid } from "uuid";
 
 const prisma = new PrismaClient();
 
-export const getClients = async(req: Request, res: Response) => {
-    const { id: userId, providerId } = req.user;
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 10;
-    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
-    // console.log(search)
-    const coverageId =
+export const getClients = async (req: Request, res: Response) => {
+  const { id: userId, providerId } = req.user;
+  const page = Number(req.query.page) || 1;
+  const limit = Number(req.query.limit) || 10;
+  const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+  const billingYear = Number(req.query.billingYear) || new Date().getFullYear();
+    console.log(search)
+  const coverageId =
     typeof req.query.coverageId === "string" && req.query.coverageId !== "All"
       ? req.query.coverageId
       : undefined;
 
-      console.log(coverageId)
-
-    const status =
+  const status =
     typeof req.query.status === "string" && req.query.status !== "All"
       ? req.query.status
       : undefined;
 
-    if (!providerId) {
-        return res.status(401).json({ message: "Provider ID not found in token" });
-    }
+  if (!providerId) {
+    return res.status(401).json({ message: "Provider ID not found in token" });
+  }
 
-    const skip = (page - 1) * limit;
+  const skip = (page - 1) * limit;
 
-    try {
-        const whereClause: any = {
-        providerId,
-        ...(coverageId && {coverageId}),
-        ...(status && { status }),
-        ...(search && {
-            OR: [
-            { fullName: { contains: search, mode: "insensitive" } },
-            { accountNumber: { contains: search, mode: "insensitive" } },
-            { email: { contains: search, mode: "insensitive" } },
-            { phoneNumber: { contains: search, mode: "insensitive" } }
-            ],
-        }),
-        };
+  try {
+    const whereClause: any = {
+      providerId,
+      ...(coverageId && { coverageId }),
+      ...(status && { status }),
+      ...(search && {
+        OR: [
+          { fullName: { contains: search, mode: "insensitive" } },
+          { email: { contains: search, mode: "insensitive" } },
+          { phoneNumber: { contains: search, mode: "insensitive" } },
+          {
+            accounts: {
+                some: {
+                    accountNumber: { contains: search, mode: "insensitive" }
+                }
+            }
+          }
+        ],
+      }),
+    };
 
-
-        // Query + total count in parallel
-        const [clients, total] = await Promise.all([
-            prisma.client.findMany({
-                where: whereClause,
-                include: {
-                    servicePlan: true,
-                    clientType: true,
-                    coverage: true,
-                    odpPort: true,
-                    accounts: {
-                        include: {
-                            servicePlan: {
-                                select: {
-                                    name: true,
-                                    monthlyFee: true
-                                }
-                            },
-                            coverage: {
-                                select: {
-                                    name: true
-                                }
-                            },
-                            odpPort: {
-                                include: {
-                                    odp: true
-                                }
-                            }
-                        },
-                        orderBy: {
-                            createdAt: "desc"
-                        }
+    const [clients, total] = await Promise.all([
+      prisma.client.findMany({
+        where: whereClause,
+        include: {
+          servicePlan: true,
+          clientType: true,
+          coverage: true,
+          odpPort: true,
+          accounts: {
+            include: {
+                servicePlan: {
+                    select: {
+                    name: true,
+                    monthlyFee: true,
+                    },
+                },
+                coverage: {
+                    select: {
+                    name: true,
+                    },
+                },
+                odpPort: {
+                    include: {
+                    odp: true,
+                    },
+                },
+                billings: {
+                    include: {
+                        discounts: true
                     }
                 },
-                orderBy: { createdAt: "desc" },
-                skip,
-                take: limit,
-            }),
-            prisma.client.count({ where: whereClause }),
-        ]);
-
-        return res.status(200).json({
-        data: clients,
-        pagination: {
-            total,
-            page,
-            limit,
-            totalPages: Math.ceil(total / limit),
+                client: {
+                    select: {
+                        id: true,
+                        fullName: true,
+                        accountNumber: true,
+                        provider: {
+                            select: {
+                                settings: true,
+                                companyName: true,
+                                companyAddress: true,
+                                companyLogoUrl: true,
+                                email: true,
+                                phoneNumber: true
+                            }
+                        }
+                    },
+                },
+            }
+        }
         },
-        });
-    } catch (error) {
-        console.error(error);
-        return res.status(500).json({ message: "Internal Server Error" });
-    }
-}
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+      }),
+      prisma.client.count({ where: whereClause }),
+    ]);
+
+    // Filter billings per account by billingYear
+    const clientsWithFilteredBillings = clients.map((client) => {
+      const accounts = client.accounts.map((account) => {
+        const filteredBillings = account.billings.filter(
+          (billing) => billing.dueDate.getFullYear() === billingYear
+        );
+        return { ...account, billings: filteredBillings };
+      });
+      return { ...client, accounts };
+    });
+
+    return res.status(200).json({
+      data: clientsWithFilteredBillings,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
 
 export const getAccounts = async(req: Request, res: Response) => {
     const { id: userId, providerId } = req.user;

@@ -98,82 +98,181 @@ export const createBilling = async (req: Request, res: Response) => {
 }
 
 export const createBillingForAccount = async (req: Request, res: Response) => {
-    const {
-        period,
-        description,
-        amount,
-        accountId,
-        dueDate
-    } = req.body
-    
-    const {providerId} = req.user as {id: string, providerId: string}
+  const {
+    period,
+    description,
+    amount,
+    accountId,
+    dueDate,
+    discounts = []
+  } = req.body;
 
-    try {
-        const billDuedate = dueDate ? new Date(dueDate) : null
-        if(billDuedate && isNaN(billDuedate.getTime())){
-            return res.status(400).json({ dueDate: 'installationDate must be a valid date' });
-        }
-        if(!period){
-            res.status(400).json({message: "Bill Period is required"})
-        }
-        const account = await prisma.accounts.findUnique({
-            where: { id: accountId },
-            include: {
-                servicePlan: true
-            }
-        })
+  const { providerId } = req.user as { id: string; providerId: string };
 
-        if(!account) {
-            return res.status(404).json({ message: 'Account not found' });
-        }
+  try {
+    const billDuedate = dueDate ? new Date(dueDate) : null;
+    if (billDuedate && isNaN(billDuedate.getTime())) {
+      return res.status(400).json({ dueDate: "dueDate must be a valid date" });
+    }
 
-        const provider = await prisma.provider.findUnique({
-            where: { id: providerId },
-            select: { settings: true },
-        });
+    if (!period) {
+      return res.status(400).json({ message: "Bill Period is required" });
+    }
 
-        const settings = provider?.settings as
-        | { 
-            billing?: { invoiceGenerationDaysBeforeDue?: number },
+    const account = await prisma.accounts.findUnique({
+      where: { id: accountId },
+      include: {
+        servicePlan: true,
+      },
+    });
+
+    if (!account) {
+      return res.status(404).json({ message: "Account not found" });
+    }
+
+    // Fetch provider settings
+    const provider = await prisma.provider.findUnique({
+      where: { id: providerId },
+      select: { settings: true },
+    });
+
+    const settings =
+      provider?.settings as
+        | {
+            billing?: { invoiceGenerationDaysBeforeDue?: number };
             invoiceDocument?: {
-                numberPrefix: string,
-                startingNumber: number,
-                includeTax: boolean,
-                taxRate: number,
-                companyLogoUrl: string,
-                footerMessage: string
-            }
-            }
+              numberPrefix: string;
+              startingNumber: number;
+              includeTax: boolean;
+              taxRate: number;
+              companyLogoUrl: string;
+              footerMessage: string;
+            };
+          }
         | undefined;
 
-        const today = new Date()
-        const prefix = settings?.invoiceDocument?.numberPrefix || 'INV-';
-        const invoiceNumber = `${prefix}${today.getFullYear().toString().slice(2)}${Math.floor(Math.random()*1e10).toString().padStart(10,'0')}`;
+    // Generate invoice number
+    const today = new Date();
+    const prefix = settings?.invoiceDocument?.numberPrefix || "INV-";
+    const invoiceNumber = `${prefix}${today
+      .getFullYear()
+      .toString()
+      .slice(2)}${Math.floor(Math.random() * 1e10)
+      .toString()
+      .padStart(10, "0")}`;
 
-        let defaultDescription;
-        if(!description){
-            defaultDescription = `Bill-Period-${period}-Acc-${account.accountNumber}`
+    // Default description
+    const defaultDescription = description
+      ? description
+      : `Bill-Period-${period}-Acc-${account.accountNumber}`;
+
+    // Compute total discount
+    const totalDiscount = discounts.reduce((sum: number, d: any) => {
+      const val = Number(d.amount);
+      return sum + (isNaN(val) ? 0 : val);
+    }, 0);
+
+    // Base amount from service plan if user doesn’t override it
+    const baseAmount = amount || account.servicePlan?.monthlyFee || 0;
+
+    // Final amount = base amount – total discount
+    const finalAmount = Math.max(baseAmount - totalDiscount, 0);
+
+    // Create billing with nested discount create
+    const billing = await prisma.billing.create({
+      data: {
+        invoiceNumber,
+        clientId: account.clientId,
+        accountId,
+        amount: finalAmount,
+        dueDate: billDuedate || new Date(new Date().setDate(account.billingDay!)),
+        period,
+        description: defaultDescription,
+
+        // --- NEW: nested Prisma create for discounts ---
+        discounts: {
+          create: discounts.map((d: any) => ({
+            description: d.description || null,
+            amount: Number(d.amount) || 0,
+          })),
+        },
+      },
+      include: {
+        discounts: true, // return discounts in response
+      },
+    });
+
+    return res.status(201).json(billing);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const updateBillingForAccount = async (req: Request, res: Response) => {
+  const { id } = req.params as { id: string }
+  const { accountId, period, amount, dueDate, discounts } = req.body
+
+  if (!isUuid(id)) {
+    return res.status(400).json({ message: "Invalid Billing ID format (UUID required)" })
+  }
+
+  try {
+    const billDuedate = dueDate ? new Date(dueDate) : null;
+    const result = await prisma.$transaction(async (tx) => {
+      // 1️⃣ Update the billing info
+      await tx.billing.update({
+        where: {
+          id,
+          accountId
+        },
+        data: {
+          period,
+          amount,
+          dueDate: billDuedate!
         }
+      })
 
-        const billing = await prisma.billing.create({
-            data: {
-                invoiceNumber: invoiceNumber || `${Date.now().toString().slice(-10)}`,
-                clientId: account.clientId,
-                accountId,
-                amount: amount  || account.servicePlan?.monthlyFee!,
-                dueDate: billDuedate || new Date(new Date().setDate(account.billingDay!)),
-                period,
-                description: description || defaultDescription
-            }
+      // 2️⃣ Delete old discounts
+      await tx.discount.deleteMany({
+        where: { billingId: id }
+      })
+
+      // 3️⃣ Insert new discounts
+      if (Array.isArray(discounts) && discounts.length > 0) {
+        await tx.discount.createMany({
+          data: discounts.map((d: any) => ({
+            billingId: id,
+            description: d.description || null,
+            amount: Number(d.amount) || 0
+          }))
         })
+      }
 
+      // 4️⃣ Fetch final updated billing with relations + discounts
+      const finalBilling = await tx.billing.findUnique({
+        where: { id },
+        include: {
+          account: {
+            include: {
+              client: true
+            }
+          },
+          discounts: true
+        }
+      })
 
-        return res.status(201).json(billing);
-    } catch (error) {
-        console.error(error);
-        return res.status(500).json({ message: 'Internal server error' });
-    }
+      return finalBilling
+    })
+
+    return res.status(200).json(result)
+  } catch (error) {
+    console.error(error)
+    return res.status(500).json({ message: "Internal server error" })
+  }
 }
+
+
 
 export const getBillingByAccountNumber = async (req: Request, res: Response) => {
     const { accountNumber } = req.params as { accountNumber: string }
@@ -197,7 +296,13 @@ export const getBillingByAccountNumber = async (req: Request, res: Response) => 
                 status: "PENDING"
             },
             include: {
-                client: true
+                account: {
+                    include: {
+                        client: true
+                    }
+                },
+                client: true,
+                discounts: true
             }
         })
 
@@ -265,6 +370,7 @@ export const getBillings = async (req: Request, res: Response) => {
         prisma.billing.findMany({
             where: whereClause,
             include: {
+                discounts: true,
                 account: {
                     include: {
                         client: {
@@ -336,7 +442,13 @@ export const getBillingById = async (req: Request, res: Response) => {
                 status: "PENDING"
             },
             include: {
-                client: true
+                client: true,
+                account: {
+                    include: {
+                        client: true
+                    }
+                },
+                discounts: true
             }
         })
 
@@ -539,6 +651,7 @@ export const confirmPayment = async (req: Request, res: Response) => {
       data: {
         status: newStatus,
         paidAmount: { increment: amount },
+        paidAt: newStatus === "PAID" ? payDate : null,
       },
     });
 

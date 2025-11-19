@@ -212,7 +212,7 @@ export const xenditWebhook = async (req: Request, res: Response) => {
         if (updatedPayment) {
           await prisma.billing.update({
             where: { id: updatedPayment.billingId },
-            data: { status: "PAID" },
+            data: { status: "PAID", paidAt: status === "PAID" ? paid_at : null },
           });
         }
       }

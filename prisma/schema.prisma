@@ -29,6 +29,10 @@ model User {
   TicketComment TicketComment[]
 
   TicketLog TicketLog[]
+
+  conversationParticipants ConversationParticipant[]
+
+  messages Message[]
 }
 
 enum UserRole {
@@ -135,6 +139,8 @@ model Billing {
   period       String?
   dueDate      DateTime
   amount       Float
+  discounts    Discount[]
+  paidAt       DateTime?
   paidAmount   Float?    @default(0)
   status       BillingStatus  @default(PENDING)
   description  String?
@@ -146,6 +152,14 @@ model Billing {
   
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+}
+
+model Discount {
+  id   String    @id @default(uuid()) @db.Uuid
+  description String?
+  amount  Float
+  billingId String @db.Uuid
+  billing Billing @relation(fields: [billingId], references: [id], onDelete: Cascade)
 }
 
 model CronJob {
@@ -231,6 +245,8 @@ model Provider {
   odcs ODC[]
 
   odps ODP[]
+
+  conversations Conversation[]
 }
 
 model Coverage {
@@ -549,5 +565,67 @@ enum TicketCategory {
   SERVICE
   REPAIR
   GENERAL
+}
+
+// System's chat models
+
+// -------------------------------------
+// Conversations (for 1-1 or group chats)
+// -------------------------------------
+model Conversation {
+  id          String          @id @default(uuid()) @db.Uuid
+  providerId  String          @db.Uuid
+  provider    Provider        @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  // True = group chat, False = direct message between two users
+  isGroup     Boolean         @default(false)
+
+  name        String?         // optional: for group chats
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  // Relations
+  participants ConversationParticipant[]
+  messages      Message[]
+}
+
+
+// -------------------------------------
+// Who belongs to a conversation
+// -------------------------------------
+model ConversationParticipant {
+  id              String        @id @default(uuid()) @db.Uuid
+  conversationId  String        @db.Uuid
+  userId          String        @db.Uuid
+  joinedAt        DateTime      @default(now())
+
+  // last time user read messages in this conversation
+  lastReadAt      DateTime?     
+
+  conversation    Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId]) // prevent duplicates
+}
+
+
+// -------------------------------------
+// Messages
+// -------------------------------------
+model Message {
+  id              String        @id @default(uuid()) @db.Uuid
+  conversationId  String        @db.Uuid
+  senderId        String        @db.Uuid
+
+  content         String?       // null if attachment only
+  attachments     Json?         // [{url, fileName, size, type}, ...]
+
+  createdAt       DateTime      @default(now())
+
+  conversation    Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender          User          @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  // For indexing messages by conversation
+  @@index([conversationId, createdAt])
 }
 
