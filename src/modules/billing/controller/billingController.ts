@@ -21,6 +21,8 @@ export const createBilling = async (req: Request, res: Response) => {
     
     const {providerId} = req.user as {id: string, providerId: string}
 
+    console.log(amount)
+
     try {
         const billDuedate = dueDate ? new Date(dueDate) : null
         if(billDuedate && isNaN(billDuedate.getTime())){
@@ -176,7 +178,7 @@ export const createBillingForAccount = async (req: Request, res: Response) => {
     const baseAmount = amount || account.servicePlan?.monthlyFee || 0;
 
     // Final amount = base amount – total discount
-    const finalAmount = Math.max(baseAmount - totalDiscount, 0);
+    const finalAmount = amount? amount : Math.max(baseAmount - totalDiscount, 0);
 
     // Create billing with nested discount create
     const billing = await prisma.billing.create({
@@ -373,6 +375,7 @@ export const getBillings = async (req: Request, res: Response) => {
                 discounts: true,
                 account: {
                     include: {
+                        servicePlan: true,
                         client: {
                             select: {
                                 id: true,

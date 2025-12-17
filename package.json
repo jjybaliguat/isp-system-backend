@@ -7,7 +7,7 @@
     "generate": "prisma generate",
     "seed": "ts-node prisma/seed.ts",
     "dev": "nodemon",
-    "start": "node dist/index.js",
+    "start": "node dist/index.js -H 127.0.0.1 -p 7000",
     "build": "tsc"
   },
   "author": "",
