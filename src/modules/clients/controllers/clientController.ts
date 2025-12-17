@@ -12,7 +12,6 @@ export const getClients = async (req: Request, res: Response) => {
   const limit = Number(req.query.limit) || 10;
   const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
   const billingYear = Number(req.query.billingYear) || new Date().getFullYear();
-    console.log(search)
   const coverageId =
     typeof req.query.coverageId === "string" && req.query.coverageId !== "All"
       ? req.query.coverageId

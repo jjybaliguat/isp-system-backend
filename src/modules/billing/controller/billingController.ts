@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import {UAParser} from "ua-parser-js"
 import { getLocalDate } from "../../../utils/getTimeOffset";
 import { startOfYear, endOfYear, formatDate } from "date-fns";
-import { PrismaClient } from "@prisma/client";
+import { BillingStatus, PrismaClient } from "@prisma/client";
 import { validate as isUuid } from "uuid";
 import { sendInvoiceReminderEmail } from "../../../jobs/sendInvoiceReminderEmail";
 import { decrypt } from "../../../utils/hasher";
@@ -20,8 +20,6 @@ export const createBilling = async (req: Request, res: Response) => {
     } = req.body
     
     const {providerId} = req.user as {id: string, providerId: string}
-
-    console.log(amount)
 
     try {
         const billDuedate = dueDate ? new Date(dueDate) : null
@@ -874,4 +872,124 @@ export const sendSmsReminder = async(req: Request, res: Response) => {
     } catch (error) {
         
     }
+}
+
+const MONTH_MAP: Record<string, number> = {
+  january: 1,
+  february: 2,
+  march: 3,
+  april: 4,
+  may: 5,
+  june: 6,
+  july: 7,
+  august: 8,
+  september: 9,
+  october: 10,
+  november: 11,
+  december: 12
+}
+
+
+export const generateBillingForAllAccounts = async (req: Request, res: Response) => {
+  const { month, year } = req.body
+  const { providerId } = req.user as { providerId: string }
+
+  if (!month || !year) {
+    return res.status(400).json({ message: "Month and year are required" })
+  }
+
+  const monthNumber = MONTH_MAP[month.toLowerCase()]
+  if (!monthNumber) {
+    return res.status(400).json({ message: "Invalid month name" })
+  }
+
+  const period = `${month} ${year}`
+
+  const provider = await prisma.provider.findUnique({
+        where: { id: providerId },
+        select: { settings: true },
+        });
+
+        const settings = provider?.settings as
+        | { 
+            billing?: { invoiceGenerationDaysBeforeDue?: number },
+            invoiceDocument?: {
+                numberPrefix: string,
+                startingNumber: number,
+                includeTax: boolean,
+                taxRate: number,
+                companyLogoUrl: string,
+                footerMessage: string
+            }
+            }
+        | undefined;
+
+  try {
+    const accounts = await prisma.accounts.findMany({
+      where: {
+        status: "ACTIVE",
+        client: {
+          providerId
+        }
+      },
+      include: {
+        servicePlan: true,
+        billings: {
+          where: { period }
+        }
+      }
+    })
+
+    const billingsToCreate = accounts
+      .filter(account => account.billings.length === 0) // ✅ prevent duplicate
+      .map(account => {
+        const dueDate = new Date(
+          Number(year),
+          monthNumber - 1,
+          account.billingDay ?? 1
+        )
+
+        const defaultDescription = `Bill-Period-${period}-Acc-${account.accountNumber}`;
+         // Generate invoice number
+        const today = new Date();
+        const prefix = settings?.invoiceDocument?.numberPrefix || "INV-";
+        const invoiceNumber = `${prefix}${today
+          .getFullYear()
+          .toString()
+          .slice(2)}${Math.floor(Math.random() * 1e10)
+          .toString()
+          .padStart(10, "0")}`;
+
+        return {
+          invoiceNumber,
+          clientId: account.clientId,
+          accountId: account.id,
+          billingDate: new Date(),
+          period,
+          dueDate,
+          description: defaultDescription,
+          amount: account.servicePlan.monthlyFee,
+          status: BillingStatus.PENDING
+        }
+      })
+
+    if (billingsToCreate.length === 0) {
+      return res.json({ message: "Billing already generated for this period" })
+    }
+
+    await prisma.billing.createMany({
+      data: billingsToCreate,
+      skipDuplicates: true
+    })
+
+    return res.json({
+      message: "Billing generated successfully",
+      period,
+      generated: billingsToCreate.length
+    })
+
+  } catch (error) {
+    console.error(error)
+    return res.status(500).json({ message: "Failed to generate billing" })
+  }
 }
