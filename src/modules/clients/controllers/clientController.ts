@@ -53,57 +53,57 @@ export const getClients = async (req: Request, res: Response) => {
       prisma.client.findMany({
         where: whereClause,
         include: {
-          servicePlan: true,
-          clientType: true,
-          coverage: true,
-          odpPort: true,
-          accounts: {
+            servicePlan: true,
+            clientType: true,
+            coverage: true,
+            odpPort: {
+            include: { odp: true }
+            },
+            accounts: { 
             include: {
                 servicePlan: {
-                    select: {
-                    name: true,
-                    monthlyFee: true,
-                    },
+                select: { name: true, monthlyFee: true }
                 },
                 coverage: {
-                    select: {
-                    name: true,
-                    },
+                select: { name: true }
                 },
                 odpPort: {
-                    include: {
-                    odp: true,
-                    },
+                include: { odp: true }
+                },
+                client: {
+                select: {
+                    id: true,
+                    fullName: true,
+                    accountNumber: true,
+                    provider: {
+                    select: {
+                        settings: true,
+                        companyName: true,
+                        companyAddress: true,
+                        companyLogoUrl: true,
+                        email: true,
+                        phoneNumber: true
+                    }
+                    }
+                }
                 },
                 billings: {
                     include: {
-                        discounts: true
-                    }
-                },
-                client: {
-                    select: {
-                        id: true,
-                        fullName: true,
-                        accountNumber: true,
-                        provider: {
-                            select: {
-                                settings: true,
-                                companyName: true,
-                                companyAddress: true,
-                                companyLogoUrl: true,
-                                email: true,
-                                phoneNumber: true
+                        discounts: true,
+                        account: {
+                            include: {
+                                servicePlan: true
                             }
                         }
-                    },
-                },
+                    }
+                }
             }
-        }
+            }
         },
         orderBy: { createdAt: "desc" },
         skip,
-        take: limit,
-      }),
+        take: limit
+        }),
       prisma.client.count({ where: whereClause }),
     ]);
 
