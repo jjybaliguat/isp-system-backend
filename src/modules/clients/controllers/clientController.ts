@@ -901,6 +901,7 @@ export const updateClientAccount = async(req: Request, res: Response) => {
         clientTypeId,
         coverageId,
         odpPortId,
+        status,
         notes,
     } = req.body
 
@@ -929,6 +930,7 @@ export const updateClientAccount = async(req: Request, res: Response) => {
                 mikrotikAccount,
                 billingDay: Number(billingDay),
                 notes,
+                status,
                 installationDate: installDate,
                 servicePlan: { connect: { id: servicePlanId } },
                 ...(clientTypeId && { clientType: { connect: { id: clientTypeId } } }),

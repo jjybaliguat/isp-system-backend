@@ -929,7 +929,8 @@ export const generateBillingForAllAccounts = async (req: Request, res: Response)
       where: {
         status: "ACTIVE",
         client: {
-          providerId
+          providerId,
+          status: "ACTIVE"
         }
       },
       include: {
