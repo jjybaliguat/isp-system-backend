@@ -25,7 +25,7 @@ export const getClientTypes = async (req: Request, res: Response) => {
 }
 
 export const createClientType = async(req: Request, res: Response) => {
-    const {providerId} = req.user
+    const {id: userId, providerId} = req.user
     const {name} = req.body
 
     try {
@@ -35,6 +35,18 @@ export const createClientType = async(req: Request, res: Response) => {
                 providerId
             }
         })
+                // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+        .create({
+            data: {
+            action: "CREATE",
+            entity: "Client Type",
+            userId,
+            message: `Client Type ${clientType.name} created`,
+            providerId,
+            },
+        })
+        .catch(console.error);
 
         return res.status(201).json(clientType)
     } catch (error) {
@@ -44,17 +56,38 @@ export const createClientType = async(req: Request, res: Response) => {
 }
 
 export const deleteClientType = async(req: Request, res: Response) => {
-    const {providerId} = req.user
+    const {id: userId, providerId} = req.user
     const {id} = req.params as {id: string}
 
     try {
+        const clientType = await prisma.clientType.findUnique({
+            where: {
+                id,
+                providerId
+            }
+        })
+        if(!clientType){
+            return res.status(404).json({message: "Client type not found"})
+        }
+
         await prisma.clientType.delete({
             where: {
                 id,
                 providerId
             }
         })
-
+                // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+        .create({
+            data: {
+            action: "DELETE",
+            entity: "Client Type",
+            userId,
+            message: `Client Type ${clientType.name} deleted`,
+            providerId,
+            },
+        })
+        .catch(console.error);
         return res.status(200).json({message: "Client type deleted successfully"})
     } catch (error) {
         console.log(error)
@@ -65,16 +98,29 @@ export const deleteClientType = async(req: Request, res: Response) => {
 export const updatedClientType = async(req: Request, res: Response) => {
     const {id} = req.params as {id: string}
     const {name} = req.body
-    
+    const {id: userId, providerId} = req.user
     try {
         const updatedClientType = await prisma.clientType.update({
             where: {
-                id
+                id,
+                providerId
             },
             data: {
                 name
             }
         })
+                // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+        .create({
+            data: {
+            action: "UPDATE",
+            entity: "Client Type",
+            userId,
+            message: `Client Type ${updatedClientType.name} updated`,
+            providerId,
+            },
+        })
+        .catch(console.error);
 
         return res.status(200).json(updatedClientType)
     } catch (error) {

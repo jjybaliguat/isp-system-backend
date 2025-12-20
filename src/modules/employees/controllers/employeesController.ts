@@ -141,64 +141,67 @@ export const createEmployee = async(req: Request, res: Response) => {
     }
 }
 
-export const updateEmployee = async(req: Request, res: Response) => {
-    const {id} = req.params as {id: string}
-    const {id: userId, providerId} = req.user
+export const updateEmployee = async (req: Request, res: Response) => {
+  const { id } = req.params as { id: string }
+  const { id: userId, providerId } = req.user
 
-    const {
-        fullName,
-        email,
-        address,
-        phoneNumber,
-        role,
-        hireDate,
-        status,
-        teamId
-    } = req.body
+  const {
+    fullName,
+    email,
+    address,
+    phoneNumber,
+    role,
+    hireDate,
+    status,
+    teamId
+  } = req.body
 
+  const dataToUpdate: any = {}
+
+  if (fullName !== undefined) dataToUpdate.fullName = fullName
+  if (email !== undefined) dataToUpdate.email = email
+  if (address !== undefined) dataToUpdate.address = address
+  if (phoneNumber !== undefined) dataToUpdate.phoneNumber = phoneNumber
+  if (role !== undefined) dataToUpdate.role = role
+  if (status !== undefined) dataToUpdate.status = status
+  if (teamId !== undefined) dataToUpdate.teamId = teamId || null
+
+  // Handle hireDate separately since it needs validation
+  if (hireDate !== undefined) {
     const dateHired = new Date(hireDate)
-
-    if(isNaN(dateHired.getTime())) return res.status(400).json({message: "Hire Date is invalid date"})
-
-    try {
-        const user = await prisma.user.findUnique({
-            where: {
-                id: userId
-            }
-        })
-        const updatedEmployee = await prisma.employees.update({
-            where: {
-                id,
-                providerId
-            },
-            data: {
-                fullName,
-                email,
-                address,
-                phoneNumber,
-                role,
-                hireDate: dateHired,
-                status,
-                teamId: teamId || null
-            }
-        })
-
-        await prisma.log.create({
-            data: {
-                userId,
-                providerId,
-                entity: "Employee",
-                action: "UPDATE",
-                message: `Employee ${updatedEmployee.fullName} updated by ${user?.fullName}`
-            }
-        })
-
-        return res.status(200).json(updateEmployee)
-    } catch (error) {
-        console.log(error)
-        return res.status(500).json({message: "Internal Server Error"})
+    if (isNaN(dateHired.getTime())) {
+      return res.status(400).json({ message: "Hire Date is invalid" })
     }
+    dataToUpdate.hireDate = dateHired
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    })
+
+    const updatedEmployee = await prisma.employees.update({
+      where: { id, providerId },
+      data: dataToUpdate
+    })
+
+    await prisma.log.create({
+      data: {
+        userId,
+        providerId,
+        entity: "Employee",
+        action: "UPDATE",
+        message: `Employee ${updatedEmployee.fullName} updated by ${user?.fullName}`
+      }
+    })
+
+    return res.status(200).json(updatedEmployee)
+  } catch (error) {
+    console.error(error)
+    return res.status(500).json({ message: "Internal Server Error" })
+  }
 }
+
 
 export const deleteEmployee = async (req: Request, res: Response) => {
     const {id} = req.params as {id: string}

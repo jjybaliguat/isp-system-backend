@@ -3,6 +3,7 @@ import { Xendit } from "xendit-node";
 import { decrypt } from "../../../utils/hasher";
 
 import { PrismaClient } from "@prisma/client";
+import { sendSms } from "../../../jobs/sendSms";
 
 const prisma = new PrismaClient();
 
@@ -207,6 +208,23 @@ export const xenditWebhook = async (req: Request, res: Response) => {
       if (status === "PAID") {
         const updatedPayment = await prisma.payment.findFirst({
           where: { xenditInvoiceId: id },
+          include: {
+            account: true,
+            billing: {
+              select: {
+                period: true
+              }
+            },
+            client: {
+              include: {
+                provider: {
+                  include: {
+                    smsIntegrationSettings: true
+                  }
+                }
+              }
+            }
+          },
         });
 
         if (updatedPayment) {
@@ -214,6 +232,33 @@ export const xenditWebhook = async (req: Request, res: Response) => {
             where: { id: updatedPayment.billingId },
             data: { status: "PAID", paidAt: status === "PAID" ? paid_at : null },
           });
+
+          if(updatedPayment.client.provider?.smsIntegrationSettings?.sendWhenPaymentIsMade){
+              // console.log("Scheduling SMS notification for new client added...");
+              setImmediate(async () => {
+                  try {
+                    const decryptedKey = decrypt(updatedPayment.client.provider.semaphoreApiKey!);
+                    const messageTemplate = updatedPayment.client.provider.smsIntegrationSettings?.sendWhenPaymentIsMadeTemplate || ""
+                    await sendSms(
+                      updatedPayment.client.phoneNumber!,
+                      messageTemplate,
+                      {
+                        name: updatedPayment.client.fullName || "",
+                        accNum: updatedPayment.account?.accountNumber || "",
+                        billingDay: updatedPayment.account?.billingDay!.toString() || "",
+                        companyName: updatedPayment.client.provider.companyName || "",
+                        email: updatedPayment.client.email || "",
+                        phone: updatedPayment.client.phoneNumber || "",
+                        period: updatedPayment.billing?.period || "",
+                        amount: amount.toString(),
+                      },
+                      decryptedKey
+                    );
+                  } catch (error) {
+                    console.error("Error sending billing SMS:", error);
+                  }
+              })
+          }
         }
       }
 

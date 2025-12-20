@@ -7,6 +7,7 @@ import { validate as isUuid } from "uuid";
 import { sendInvoiceReminderEmail } from "../../../jobs/sendInvoiceReminderEmail";
 import { decrypt } from "../../../utils/hasher";
 import { sendPaymentConfirmation } from "../../../jobs/sendPaymentConfirmation";
+import { sendSms } from "../../../jobs/sendSms";
 
 const prisma = new PrismaClient();
 
@@ -133,7 +134,12 @@ export const createBillingForAccount = async (req: Request, res: Response) => {
     // Fetch provider settings
     const provider = await prisma.provider.findUnique({
       where: { id: providerId },
-      select: { settings: true },
+      select: { 
+        companyName: true,
+        settings: true,
+        semaphoreApiKey: true,
+        smsIntegrationSettings: true
+      },
     });
 
     const settings =
@@ -199,8 +205,37 @@ export const createBillingForAccount = async (req: Request, res: Response) => {
       },
       include: {
         discounts: true, // return discounts in response
+        account: true,
+        client: true
       },
     });
+
+    if(provider?.smsIntegrationSettings?.sendWhenBillIsMade){
+      setImmediate(async () => {
+        try {
+          const decryptedKey = decrypt(provider.semaphoreApiKey!);
+          const messageTemplate = provider.smsIntegrationSettings?.sendWhenBillIsMadeTemplate || ""
+          await sendSms(
+            billing.client.phoneNumber!,
+            messageTemplate,
+            {
+              name: billing.client.fullName,
+              amount: billing.amount.toString(),
+              accNum: account.accountNumber,
+              dueDate: billing.dueDate.toLocaleDateString(),
+              period: billing.period!,
+              companyName: provider.companyName || "",
+              link: `https://sierracommunication.net/checkout/payment/${billing.id}`,
+              email: billing.client.email || "",
+              phone: billing.client.phoneNumber || ""
+            },
+            decryptedKey
+          );
+        } catch (error) {
+          console.error("Error sending billing SMS:", error);
+        }
+    })
+  }
 
     return res.status(201).json(billing);
   } catch (error) {
@@ -595,7 +630,7 @@ export const confirmPayment = async (req: Request, res: Response) => {
         where: { id: userId },
         include: {
           employee: true,
-          provider: { select: { name: true, settings: true } },
+          provider: { select: { name: true, settings: true, companyName: true, smsIntegrationSettings: true, semaphoreApiKey: true } },
         },
       }),
 
@@ -654,6 +689,10 @@ export const confirmPayment = async (req: Request, res: Response) => {
         paidAmount: { increment: amount },
         paidAt: newStatus === "PAID" ? payDate : null,
       },
+      include: {
+        client: true,
+        account: true
+      }
     });
 
     // ---- LOG ACTION (non-blocking) ----
@@ -716,6 +755,34 @@ export const confirmPayment = async (req: Request, res: Response) => {
       );
     }
 
+    // Send sms notification
+    if(user && user.provider?.smsIntegrationSettings?.sendWhenPaymentIsMade){
+        // console.log("Scheduling SMS notification for confirm payment...");
+        setImmediate(async () => {
+            try {
+              const decryptedKey = decrypt(user.provider.semaphoreApiKey!);
+              const messageTemplate = user.provider.smsIntegrationSettings?.sendWhenPaymentIsMadeTemplate || ""
+              await sendSms(
+                updatedBill.client.phoneNumber!,
+                messageTemplate,
+                {
+                  name: updatedBill.client.fullName || "",
+                  accNum: updatedBill.account?.accountNumber || "",
+                  billingDay: updatedBill.account?.billingDay!.toString() || "",
+                  companyName: user.provider.companyName || "",
+                  email: updatedBill.client.email || "",
+                  phone: updatedBill.client.phoneNumber || "",
+                  amount: amount.toString(),
+                  period: updatedBill.period || "",
+                },
+                decryptedKey
+              );
+            } catch (error) {
+              console.error("Error sending billing SMS:", error);
+            }
+        })
+    }
+
     // ---- FAST RESPONSE ----
     return res.status(200).json(updatedBill);
   } catch (error) {
@@ -726,7 +793,7 @@ export const confirmPayment = async (req: Request, res: Response) => {
 
 
 export const sendEmailReminder = async(req: Request, res: Response) => {
-    const {providerId} = req.user
+    const {id: userId, providerId} = req.user
     const {id} = req.params as {id: string}
 
     if (!isUuid(id)) {
@@ -803,6 +870,18 @@ export const sendEmailReminder = async(req: Request, res: Response) => {
                 paymentUrl: `http://localhost:3000/checkout/payment/${billing?.id}`
               }
         )
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+        .create({
+            data: {
+            action: "EMAIL_REMINDER",
+            entity: "Billing",
+            userId,
+            message: `Billing reminder sent for invoice ${billing?.invoiceNumber}`,
+            providerId,
+            },
+        })
+        .catch(console.error);
 
         return res.status(200).json({message: "Billing reminder sent"})
     } catch (error) {
@@ -812,7 +891,7 @@ export const sendEmailReminder = async(req: Request, res: Response) => {
 }
 
 export const sendSmsReminder = async(req: Request, res: Response) => {
-    const {providerId} = req.user
+    const {id: userId, providerId} = req.user
     const {id} = req.params as {id: string}
 
     if (!isUuid(id)) {
@@ -867,6 +946,19 @@ export const sendSmsReminder = async(req: Request, res: Response) => {
         const data = await response.json()
 
         if(data.apikey) return res.status(400).json({message: "Invalid SMS Api Key"})
+        
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+        .create({
+            data: {
+            action: "REMINDER_SMS",
+            entity: "Billing",
+            userId,
+            message: `SMS reminder sent for billing ${billing?.invoiceNumber}`,
+            providerId,
+            },
+        })
+        .catch(console.error);
 
         return res.status(200).json({message: "Message sent"})
     } catch (error) {
@@ -891,8 +983,8 @@ const MONTH_MAP: Record<string, number> = {
 
 
 export const generateBillingForAllAccounts = async (req: Request, res: Response) => {
-  const { month, year } = req.body
-  const { providerId } = req.user as { providerId: string }
+  const { month, year, startDay, endDay } = req.body
+  const { id: userId, providerId } = req.user as { id: string, providerId: string }
 
   if (!month || !year) {
     return res.status(400).json({ message: "Month and year are required" })
@@ -907,7 +999,7 @@ export const generateBillingForAllAccounts = async (req: Request, res: Response)
 
   const provider = await prisma.provider.findUnique({
         where: { id: providerId },
-        select: { settings: true },
+        select: { settings: true, smsIntegrationSettings: true, semaphoreApiKey: true, companyName: true },
         });
 
         const settings = provider?.settings as
@@ -931,6 +1023,10 @@ export const generateBillingForAllAccounts = async (req: Request, res: Response)
         client: {
           providerId,
           status: "ACTIVE"
+        },
+        billingDay: {
+          gte: startDay ? Number(startDay) : 1,
+          lte: endDay ? Number(endDay) : 31
         }
       },
       include: {
@@ -982,6 +1078,60 @@ export const generateBillingForAllAccounts = async (req: Request, res: Response)
       data: billingsToCreate,
       skipDuplicates: true
     })
+
+    if(provider?.smsIntegrationSettings?.sendWhenBillIsMade){
+        setImmediate(async () => {
+          try {
+            const decryptedKey = decrypt(provider.semaphoreApiKey!);
+            const messageTemplate = provider.smsIntegrationSettings?.sendWhenBillIsMadeTemplate || ""
+            for(const billingData of billingsToCreate){
+                const account = await prisma.accounts.findUnique({
+                    where: { id: billingData.accountId },
+                });
+              const billing = await prisma.billing.findFirst({
+                  where: {
+                      accountId: billingData.accountId,
+                      period: billingData.period
+                  },
+                  include: {
+                      client: true
+                  }
+              })
+              await sendSms(
+                billing!.client.phoneNumber!,
+                messageTemplate,
+                {
+                  name: billing!.client.fullName,
+                  amount: billing!.amount.toString(),
+                  accNum: account!.accountNumber,
+                  dueDate: billing!.dueDate.toLocaleDateString(),
+                  period: billing!.period!,
+                  companyName: provider.companyName || "",
+                  link: `https://sierracommunication.net/checkout/payment/${billing!.id}`,
+                  email: billing!.client.email || "",
+                  phone: billing!.client.phoneNumber || ""
+                },
+                decryptedKey
+              );
+            }
+          } catch (error) {
+            console.error("Error sending billing SMS:", error);
+          }
+      })
+    }
+
+    // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+        .create({
+            data: {
+            action: "GENERATE",
+            entity: "Billing",
+            userId,
+            message: `Billing generated for period ${period}, range day ${startDay || '1'} to ${endDay || '31'}`,
+            providerId,
+            },
+        })
+        .catch(console.error);
 
     return res.json({
       message: "Billing generated successfully",

@@ -136,7 +136,7 @@ export const getOdpPort = async(req: Request, res: Response) => {
 }
 
 export const createOlt = async(req: Request, res: Response) => {
-    const {providerId} = req.user
+    const {id: userId, providerId} = req.user
     const body = req.body
     const {latitude, longitude, ponCount} = body
 
@@ -160,6 +160,19 @@ export const createOlt = async(req: Request, res: Response) => {
             data: ponPortsData,
         });
 
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+        .create({
+            data: {
+            action: "CREATE",
+            entity: "Network",
+            userId,
+            message: `Network OLT created`,
+            providerId,
+            },
+        })
+        .catch(console.error);
+
         return res.status(201).json(olt)
     } catch (error) {
         console.log(error)
@@ -168,7 +181,7 @@ export const createOlt = async(req: Request, res: Response) => {
 }
 
 export const createPonPort = async(req: Request, res: Response) => {
-    const {providerId} = req.user
+    const {id: userId, providerId} = req.user
     const body = req.body
     const {oltId} = body
     const {portNumber} = body
@@ -189,7 +202,18 @@ export const createPonPort = async(req: Request, res: Response) => {
                 portNumber: Number(portNumber)
             }
         })
-
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+        .create({
+            data: {
+            action: "CREATE",
+            entity: "Network",
+            userId,
+            message: `Network PON Port created`,
+            providerId,
+            },
+        })
+        .catch(console.error);
         return res.status(201).json(ponPort)
     } catch (error) {
         console.log(error)
@@ -198,7 +222,7 @@ export const createPonPort = async(req: Request, res: Response) => {
 }
 
 export const createLcp = async(req: Request, res: Response) => {
-    const {providerId} = req.user
+    const {id: userId, providerId} = req.user
     const body = req.body
     const {latitude, longitude, ponPortId} = body
     const lat = Number(latitude);
@@ -221,7 +245,18 @@ export const createLcp = async(req: Request, res: Response) => {
                 providerId
             }
         })
-
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+        .create({
+            data: {
+            action: "CREATE",
+            entity: "Network",
+            userId,
+            message: `Network LCP created`,
+            providerId,
+            },
+        })
+        .catch(console.error);
         return res.status(201).json(lcp)
     } catch (error) {
         console.log(error)
@@ -230,7 +265,7 @@ export const createLcp = async(req: Request, res: Response) => {
 }
 
 export const createOdc = async(req: Request, res: Response) => {
-    const {providerId} = req.user
+    const {id: userId, providerId} = req.user
     const body = req.body
     const {latitude, longitude} = body
 
@@ -247,6 +282,19 @@ export const createOdc = async(req: Request, res: Response) => {
             }
         })
 
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+        .create({
+            data: {
+            action: "CREATE",
+            entity: "Network",
+            userId,
+            message: `Network ODC created`,
+            providerId,
+            },
+        })
+        .catch(console.error);
+
         return res.status(201).json(odc)
     } catch (error) {
         console.log(error)
@@ -254,7 +302,7 @@ export const createOdc = async(req: Request, res: Response) => {
     }
 }
 export const createOdp = async(req: Request, res: Response) => {
-    const {providerId} = req.user
+    const {id: userId, providerId} = req.user
     const body = req.body
     const {latitude, longitude, portCount} = body
     const {odcId, lcpId} = body
@@ -296,6 +344,18 @@ export const createOdp = async(req: Request, res: Response) => {
         data: portsData,
         });
 
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+        .create({
+            data: {
+            action: "CREATE",
+            entity: "Network",
+            userId,
+            message: `Network ODP created`,
+            providerId,
+            },
+        })
+        .catch(console.error);
 
         return res.status(201).json(odp)
     } catch (error) {
@@ -306,7 +366,7 @@ export const createOdp = async(req: Request, res: Response) => {
 
 export const createOdpPort = async(req: Request, res: Response) => {
     const {portNumber, odpId} = req.body
-
+    const {id: userId, providerId} = req.user
     try {
         const isPortExist = await prisma.odpPort.findFirst({
             where: {
@@ -325,6 +385,19 @@ export const createOdpPort = async(req: Request, res: Response) => {
                 odpId
             }
         })
+        
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+        .create({
+            data: {
+            action: "CREATE",
+            entity: "Network",
+            userId,
+            message: `Network ODP Port created`,
+            providerId,
+            },
+        })
+        .catch(console.error);
 
         return res.status(201).json(odpPort)
     } catch (error) {
@@ -334,27 +407,52 @@ export const createOdpPort = async(req: Request, res: Response) => {
 }
 
 export const assignOdpPort = async(req: Request, res: Response) => {
-    const {clientId, portId} = req.body
-
+    const {accountId, portId} = req.body
+    const {id: userId, providerId} = req.user
     try {
-        const client = await prisma.client.findUnique({
+        const account = await prisma.accounts.findUnique({
             where: {
-                id: clientId
+                id: accountId
+            },
+            include: {
+                client: {
+                    select: {
+                        fullName: true
+                    }
+                }
             }
         })
 
-        if(!client) return res.status(400).json({message: "Client not found."})
+        if(!account) return res.status(400).json({message: "Client not found."})
 
-        await prisma.odpPort.update({
+        const odpPort = await prisma.odpPort.update({
             where: {
                 id: portId
             },
             data: {
-                clientId,
+                accountId,
                 status: "OCCUPIED"
+            },
+            include: {
+                odp: {
+                    select: {
+                        odpCode: true
+                    }
+                }
             }
         })
-
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+        .create({
+            data: {
+            action: "ASSIGN",
+            entity: "Network",
+            userId,
+            message: `Network ODP ${odpPort.odp.odpCode} Port ${odpPort.portNumber} assigned to client ${account.client.fullName}`,
+            providerId,
+            },
+        })
+        .catch(console.error);
         return res.status(200).json({message: "Port assigned to client successfully"})
     } catch (error) {
         console.log(error)
@@ -364,8 +462,24 @@ export const assignOdpPort = async(req: Request, res: Response) => {
 
 export const unAssignOdpPort = async(req: Request, res: Response) => {
     const {accountId} = req.body
+    const {id: userId, providerId} = req.user
     try {
-        await prisma.odpPort.update({
+        const odpPort = await prisma.odpPort.findUnique({
+            where: {
+                accountId
+            },
+            include: {
+                account: {
+                    include: {
+                        client: true
+                    }
+                }
+            }
+        })
+        if(!odpPort){
+            return res.status(400).json({message: "ODP Port not found."})
+        }
+        const odpPortUpdated = await prisma.odpPort.update({
             where: {
                 accountId
             },
@@ -373,9 +487,27 @@ export const unAssignOdpPort = async(req: Request, res: Response) => {
                 clientId: null,
                 accountId: null,
                 status: "AVAILABLE"
+            },
+            include: {
+                odp: {
+                    select: {
+                        odpCode: true
+                    }
+                }
             }
         })
-
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+        .create({
+            data: {
+            action: "UNASSIGN",
+            entity: "Network",
+            userId,
+            message: `Network ODP ${odpPortUpdated.odp.odpCode} Port ${odpPortUpdated.portNumber} unassigned to client ${odpPort.account?.client.fullName}`,
+            providerId,
+            },
+        })
+        .catch(console.error);
         return res.status(200).json({message: "Port unassigned to client successfully"})
     } catch (error) {
         console.log(error)

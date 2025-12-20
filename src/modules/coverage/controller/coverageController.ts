@@ -34,10 +34,13 @@ export const createCoverage = async(req: Request, res: Response) => {
         longitude,
         radius
     } = req.body
-    const {providerId} = req.user
 
     if(!name || !latitude || !longitude) return res.status(400).json({message: "Missing required fields"})
 
+    const { id: userId, providerId } = req.user as {
+        id: string;
+        providerId: string;
+    };
     try {
         const coverage = await prisma.coverage.create({
             data: {
@@ -48,6 +51,19 @@ export const createCoverage = async(req: Request, res: Response) => {
                 providerId
             }
         })
+
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+        .create({
+            data: {
+            action: "CREATE",
+            entity: "Coverage",
+            userId,
+            message: `Coverage ${coverage.name} created`,
+            providerId,
+            },
+        })
+        .catch(console.error);
 
         return res.status(201).json(coverage)
     } catch (error) {
@@ -60,7 +76,7 @@ export const updateCoverage = async(req: Request, res: Response) => {
     const {id} = req.params as {id: string}
 
     const body = req.body
-    const {providerId} = req.user
+    const {id: userId, providerId} = req.user
 
     try {
         const updatedCoverage = await prisma.coverage.update({
@@ -70,7 +86,18 @@ export const updateCoverage = async(req: Request, res: Response) => {
             },
             data: body
         })
-
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+        .create({
+            data: {
+            action: "UPDATE",
+            entity: "Coverage",
+            userId,
+            message: `Coverage ${updatedCoverage.name} updated`,
+            providerId,
+            },
+        })
+        .catch(console.error);
         return res.status(200).json(updatedCoverage)
     } catch (error) {
         console.log(error)
@@ -80,14 +107,33 @@ export const updateCoverage = async(req: Request, res: Response) => {
 
 export const deleteCoverage = async(req: Request, res: Response) => {
     const {id} = req.params as {id: string}
-    
+    const {id: userId, providerId} = req.user
     try {
+        const coverage = await prisma.coverage.findUnique({
+            where: {
+                id
+            }
+        })
+        if(!coverage){
+            return res.status(404).json({message: "Coverage not found"})
+        }
         await prisma.coverage.delete({
             where: {
                 id
             }
         })
-
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+        .create({
+            data: {
+            action: "DELETE",
+            entity: "Coverage",
+            userId,
+            message: `Coverage ${coverage.name} deleted`,
+            providerId,
+            },
+        })
+        .catch(console.error);
         return res.status(200).json({message: "Coverage deleted successfully"})
     } catch (error) {
         console.log(error)

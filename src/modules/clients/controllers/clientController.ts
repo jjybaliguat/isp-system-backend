@@ -3,6 +3,8 @@ import { Request, Response } from "express";
 import { logTransaction } from "../../../utils/logger";
 import { addMonths, startOfMonth, endOfMonth, addDays } from "date-fns";
 import { validate as isUuid } from "uuid";
+import { decrypt } from "../../../utils/hasher";
+import { sendSms } from "../../../jobs/sendSms";
 
 const prisma = new PrismaClient();
 
@@ -426,6 +428,12 @@ export const createClient = async(req: Request, res: Response) => {
   if(phoneNumberExisting) return res.status(400).json({ error: 'Phone Number already exists' });
 
     try {
+        const provider = await prisma.provider.findUnique({
+            where: { id: providerId },
+            select: { settings: true, smsIntegrationSettings: true, companyName: true, semaphoreApiKey: true},
+        });
+
+
         const client = await prisma.client.create({
             data: {
                 code,
@@ -464,6 +472,31 @@ export const createClient = async(req: Request, res: Response) => {
             }
         })
 
+        if(provider?.smsIntegrationSettings?.sendWhenCustomerAdded){
+            console.log("Scheduling SMS notification for new client added...");
+            setImmediate(async () => {
+                try {
+                  const decryptedKey = decrypt(provider.semaphoreApiKey!);
+                  const messageTemplate = provider.smsIntegrationSettings?.sendWhenCustomerAddedTemplate || ""
+                  await sendSms(
+                    client.phoneNumber!,
+                    messageTemplate,
+                    {
+                      name: client.fullName,
+                      accNum: account.accountNumber,
+                      billingDay: account.billingDay!.toString() || "",
+                      companyName: provider.companyName || "",
+                      email: client.email || "",
+                      phone: client.phoneNumber || ""
+                    },
+                    decryptedKey
+                  );
+                } catch (error) {
+                  console.error("Error sending billing SMS:", error);
+                }
+            })
+        }
+
         
         if(odpPortId && odpPortId !== ""){
             await prisma.odpPort.update({
@@ -477,10 +510,6 @@ export const createClient = async(req: Request, res: Response) => {
                 }
             })
         }
-        const provider = await prisma.provider.findUnique({
-        where: { id: providerId },
-        select: { settings: true },
-        });
 
         const settings = provider?.settings as
         | { 
@@ -750,8 +779,33 @@ export const createAccount = async(req: Request, res: Response) => {
             });
         const provider = await prisma.provider.findUnique({
         where: { id: providerId },
-        select: { settings: true },
+        select: { settings: true, smsIntegrationSettings: true, companyName: true, semaphoreApiKey: true},
         });
+
+        if(result && provider?.smsIntegrationSettings?.sendWhenCustomerAdded){
+            // console.log("Scheduling SMS notification for new client added...");
+            setImmediate(async () => {
+                try {
+                  const decryptedKey = decrypt(provider.semaphoreApiKey!);
+                  const messageTemplate = provider.smsIntegrationSettings?.sendWhenCustomerAddedTemplate || ""
+                  await sendSms(
+                    result?.client.phoneNumber!,
+                    messageTemplate,
+                    {
+                      name: result?.client.fullName || "",
+                      accNum: result?.accountNumber || "",
+                      billingDay: result?.billingDay!.toString() || "",
+                      companyName: provider.companyName || "",
+                      email: result?.client.email || "",
+                      phone: result?.client.phoneNumber || ""
+                    },
+                    decryptedKey
+                  );
+                } catch (error) {
+                  console.error("Error sending billing SMS:", error);
+                }
+            })
+        }
 
         const settings = provider?.settings as
         | { 

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import {  getProvider, getProviderById, getProviders, getStoredKey, testSemaphoreConnection, testXenditConnection, updateAccount, updateSemaphoreKey, updateXenditKey } from '../controllers/providerController';
+import {  createSmsIntegrationSettings, getProvider, getProviderById, getProviders, getSmsIntegrationSettings, getStoredKey, testSemaphoreConnection, testXenditConnection, updateAccount, updateSemaphoreKey, updateXenditKey } from '../controllers/providerController';
 import { authenticateProvider, validateProviderSmsKey, validateProviderXenditKey } from '../../../middlewares/authMiddleware';
 import { rateLimiter } from '../../../middlewares/rateLimiter';
 
@@ -13,6 +13,8 @@ router.patch('/update-account', authenticateProvider, updateAccount);
 // router.delete('/:id', deleteProvider);
 router.post('/xendit-key', authenticateProvider, updateXenditKey);
 router.post('/semaphore-key', authenticateProvider, updateSemaphoreKey);
+router.post('/sms-integration-settings', authenticateProvider, createSmsIntegrationSettings);
+router.get('/sms-integration-settings', authenticateProvider, getSmsIntegrationSettings);
 router.get('/stored-keys', authenticateProvider, getStoredKey);
 router.get('/xendit-test', authenticateProvider, validateProviderXenditKey, testXenditConnection);
 router.get('/semaphore-test', authenticateProvider, validateProviderSmsKey, testSemaphoreConnection);

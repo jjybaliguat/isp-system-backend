@@ -235,6 +235,7 @@ model Provider {
   employees      Employees[]
   teams          EmployeesTeam[]
   settings  Json? @default("{}")
+  smsIntegrationSettings SmsIntegrationSettings?
 
   Ticket Ticket[]
 
@@ -247,6 +248,26 @@ model Provider {
   odps ODP[]
 
   conversations Conversation[]
+}
+
+model SmsIntegrationSettings {
+  id          String   @id @default(uuid()) @db.Uuid
+  providerId  String   @db.Uuid @unique
+  provider    Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  sendWhenBillIsMade Boolean @default(false)
+  sendWhenBillIsDue Boolean @default(false)
+  sendWhenPaymentIsMade Boolean @default(false)
+  sendWhenCustomerAdded Boolean @default(false)
+  sendDaysBeforeDueEnabled    Boolean @default(false)
+  sendDaysBeforeDueDays       Int?
+
+  sendWhenBillIsMadeTemplate String?
+  sendWhenBillIsDueTemplate String?
+  sendWhenPaymentIsMadeTemplate String?
+  sendWhenCustomerAddedTemplate String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Coverage {

@@ -51,7 +51,7 @@ export const createUser = async(req: Request, res: Response) => {
         password
     } = req.body
 
-    const {providerId} = req.user
+    const {id: userId, providerId} = req.user
 
     try {
         const employee = await prisma.employees.findUnique({
@@ -81,7 +81,18 @@ export const createUser = async(req: Request, res: Response) => {
                 providerId
             }
         })
-
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+        .create({
+            data: {
+            action: "CREATE",
+            entity: "User",
+            userId,
+            message: `User ${newUser.email} created`,
+            providerId,
+            },
+        })
+        .catch(console.error);
         return res.status(201).json(newUser);
     } catch (error) {
         console.log(error);
@@ -91,15 +102,37 @@ export const createUser = async(req: Request, res: Response) => {
 
 export const deleteUser = async(req: Request, res: Response) => {
     const { id } = req.params as {id: string}
-    const {providerId} = req.user
+    const {id: userId, providerId} = req.user
 
     try {
+        const user = await prisma.user.findUnique({
+            where: {
+                id,
+                providerId
+            }
+        })
+        if(!user){
+            return res.status(404).json({message: "User not found"})
+        }
         await prisma.user.delete({
             where: {
                 id,
                 providerId
             }
         })
+
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+        .create({
+            data: {
+            action: "DELETE",
+            entity: "User",
+            userId,
+            message: `User ${user.email} deleted`,
+            providerId,
+            },
+        })
+        .catch(console.error);
         return res.status(200).json({message: "User deleted successfully"})
     } catch (error) {
         console.log(error);

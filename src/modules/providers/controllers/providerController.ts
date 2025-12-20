@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import e, { Request, Response } from 'express';
 import { validate as isUuid } from "uuid";
 import { UserRole } from '@prisma/client';
 import { decrypt, encrypt } from '../../../utils/hasher';
@@ -312,4 +312,87 @@ export const updateAccount = async(req: Request, res: Response) => {
     } catch (error) {
         console.log(error)
     }
+}
+
+export const createSmsIntegrationSettings = async(req: Request, res: Response) => {
+    const {
+        sendWhenBillIsMade,
+        sendWhenBillIsDue,
+        sendWhenPaymentIsMade,
+        sendWhenCustomerAdded,
+        sendDaysBeforeDue,
+        sendWhenBillIsMadeTemplate,
+        sendWhenBillIsDueTemplate,
+        sendWhenPaymentIsMadeTemplate,
+        sendWhenCustomerAddedTemplate
+    } = req.body
+
+    const {providerId} = req.user
+
+    try {
+        const existingSettings = await prisma.smsIntegrationSettings.findUnique({
+            where: {
+                providerId
+            }
+        })
+        if(existingSettings) {
+            const updatedSettings = await prisma.smsIntegrationSettings.update({
+                where: {
+                    providerId
+                },
+                data: {
+                    sendWhenBillIsMade: sendWhenBillIsMade !== undefined ? sendWhenBillIsMade : existingSettings.sendWhenBillIsMade,
+                    sendWhenBillIsDue: sendWhenBillIsDue !== undefined ? sendWhenBillIsDue : existingSettings.sendWhenBillIsDue,
+                    sendWhenPaymentIsMade: sendWhenPaymentIsMade !== undefined ? sendWhenPaymentIsMade : existingSettings.sendWhenPaymentIsMade,
+                    sendWhenCustomerAdded: sendWhenCustomerAdded !== undefined ? sendWhenCustomerAdded : existingSettings.sendWhenCustomerAdded,
+                    sendDaysBeforeDueEnabled: sendDaysBeforeDue !== undefined ? sendDaysBeforeDue.enabled : existingSettings.sendDaysBeforeDueEnabled,
+                    sendDaysBeforeDueDays: sendDaysBeforeDue !== undefined ? sendDaysBeforeDue.daysBefore : existingSettings.sendDaysBeforeDueDays,
+                    sendWhenBillIsMadeTemplate: sendWhenBillIsMadeTemplate !== undefined ? sendWhenBillIsMadeTemplate : existingSettings.sendWhenBillIsMadeTemplate,
+                    sendWhenBillIsDueTemplate: sendWhenBillIsDueTemplate !== undefined ? sendWhenBillIsDueTemplate : existingSettings.sendWhenBillIsDueTemplate,
+                    sendWhenPaymentIsMadeTemplate: sendWhenPaymentIsMadeTemplate !== undefined ? sendWhenPaymentIsMadeTemplate : existingSettings.sendWhenPaymentIsMadeTemplate,
+                    sendWhenCustomerAddedTemplate: sendWhenCustomerAddedTemplate !== undefined ? sendWhenCustomerAddedTemplate : existingSettings.sendWhenCustomerAddedTemplate
+                }
+            })
+            return res.status(200).json(updatedSettings)
+        }else{
+            const settings = await prisma.smsIntegrationSettings.create({
+                data: {
+                    providerId,
+                    sendWhenBillIsMade,
+                    sendWhenBillIsDue,
+                    sendWhenPaymentIsMade,
+                    sendWhenCustomerAdded,
+                    sendDaysBeforeDueEnabled: sendDaysBeforeDue.enabled,
+                    sendDaysBeforeDueDays: sendDaysBeforeDue.daysBefore,
+                    sendWhenBillIsMadeTemplate,
+                    sendWhenBillIsDueTemplate,
+                    sendWhenPaymentIsMadeTemplate,
+                    sendWhenCustomerAddedTemplate
+                }
+            })
+            return res.status(201).json(settings)
+        }
+    } catch (error) {
+        console.log(error)
+        res.status(500).json({ message: 'Internal server error' })
+    }
+}
+
+export const getSmsIntegrationSettings = async(req: Request, res: Response) => {
+    const {providerId} = req.user
+    try {
+        const settings = await prisma.smsIntegrationSettings.findUnique({
+            where: {
+                providerId
+            }
+        })
+        if(!settings) {
+            return res.status(404).json({message: "SMS Integration Settings not found"})
+        }
+        return res.status(200).json(settings)
+    }
+    catch (error) {
+        console.log(error)
+        res.status(500).json({ message: 'Internal server error' })
+    }   
 }

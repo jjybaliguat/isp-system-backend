@@ -46,7 +46,8 @@ export const sendSms = async(req: Request,res: Response) => {
         recipients,
         message
     } = req.body
-
+    const {id: userId, providerId} = req.user
+    
     try {
         const response: any = await fetch(`https://api.semaphore.co/api/v4/messages?apikey=${smsKey}&number=${recipients}&message=${message}`, {
             method: "POST",
@@ -58,7 +59,19 @@ export const sendSms = async(req: Request,res: Response) => {
         const data = await response.json()
 
         if(data.apikey) return res.status(400).json({message: "Invalid Api Key"})
-
+        
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+        .create({
+            data: {
+            action: "SEND_SMS",
+            entity: "SMS",
+            userId,
+            message: `SMS sent to ${recipients}`,
+            providerId,
+            },
+        })
+        .catch(console.error);
         return res.status(200).json({message: "Message sent"})
     } catch (error) {
         console.log(error)
