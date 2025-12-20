@@ -25,6 +25,7 @@ import { registerTenantJobs } from "./jobs/jobManager";
 import cron from 'node-cron'
 import { checkOverdueInvoices } from './jobs/checkOverdueInvoices';
 import { PrismaClient } from "@prisma/client";
+import { sendSmsWhenTheBillIsDue } from './jobs/sendSmsWhenTheBillIsDue';
 
 const prisma = new PrismaClient();
 
@@ -84,11 +85,16 @@ app.use("/api/upload-image", uploadImageRoute)
 app.use("/api/settings", settingsRoute)
 app.use("/api/network-hierarchy", hierarchyRoute)
 
-cron.schedule('0 0 * * *', () => {
-  checkOverdueInvoices()
-}, {
-  timezone: "Asia/Manila"
-});
+cron.schedule( "*/30 * * * * *", async () => {
+  console.log("Running test cron job:", new Date().toLocaleString());
+  try {
+    await checkOverdueInvoices();
+    await sendSmsWhenTheBillIsDue();
+  } catch (error) {
+    console.error("Error in daily cron job:", error);
+  }
+}, { timezone: "Asia/Manila" });
+
 
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);

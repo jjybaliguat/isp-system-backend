@@ -324,7 +324,8 @@ export const createSmsIntegrationSettings = async(req: Request, res: Response) =
         sendWhenBillIsMadeTemplate,
         sendWhenBillIsDueTemplate,
         sendWhenPaymentIsMadeTemplate,
-        sendWhenCustomerAddedTemplate
+        sendWhenCustomerAddedTemplate,
+        sendDaysBeforeDueTemplate
     } = req.body
 
     const {providerId} = req.user
@@ -350,7 +351,8 @@ export const createSmsIntegrationSettings = async(req: Request, res: Response) =
                     sendWhenBillIsMadeTemplate: sendWhenBillIsMadeTemplate !== undefined ? sendWhenBillIsMadeTemplate : existingSettings.sendWhenBillIsMadeTemplate,
                     sendWhenBillIsDueTemplate: sendWhenBillIsDueTemplate !== undefined ? sendWhenBillIsDueTemplate : existingSettings.sendWhenBillIsDueTemplate,
                     sendWhenPaymentIsMadeTemplate: sendWhenPaymentIsMadeTemplate !== undefined ? sendWhenPaymentIsMadeTemplate : existingSettings.sendWhenPaymentIsMadeTemplate,
-                    sendWhenCustomerAddedTemplate: sendWhenCustomerAddedTemplate !== undefined ? sendWhenCustomerAddedTemplate : existingSettings.sendWhenCustomerAddedTemplate
+                    sendWhenCustomerAddedTemplate: sendWhenCustomerAddedTemplate !== undefined ? sendWhenCustomerAddedTemplate : existingSettings.sendWhenCustomerAddedTemplate,
+                    sendDaysBeforeDueTemplate: sendDaysBeforeDueTemplate !== undefined ? sendDaysBeforeDueTemplate : existingSettings.sendDaysBeforeDueTemplate
                 }
             })
             return res.status(200).json(updatedSettings)
@@ -367,7 +369,8 @@ export const createSmsIntegrationSettings = async(req: Request, res: Response) =
                     sendWhenBillIsMadeTemplate,
                     sendWhenBillIsDueTemplate,
                     sendWhenPaymentIsMadeTemplate,
-                    sendWhenCustomerAddedTemplate
+                    sendWhenCustomerAddedTemplate,
+                    sendDaysBeforeDueTemplate
                 }
             })
             return res.status(201).json(settings)

@@ -108,7 +108,7 @@ export const createBillingForAccount = async (req: Request, res: Response) => {
     discounts = []
   } = req.body;
 
-  const { providerId } = req.user as { id: string; providerId: string };
+  const { id: userId, providerId } = req.user as { id: string; providerId: string };
 
   try {
     const billDuedate = dueDate ? new Date(dueDate) : null;
@@ -209,6 +209,19 @@ export const createBillingForAccount = async (req: Request, res: Response) => {
         client: true
       },
     });
+
+    // ---- LOG ACTION (non-blocking) ----
+      prisma.log
+        .create({
+          data: {
+            action: "CREATE",
+            entity: "Billing",
+            userId,
+            message: `Bill generated for client ${billing.client.fullName} for period ${period}`,
+            providerId,
+          },
+        })
+        .catch(console.error);
 
     if(provider?.smsIntegrationSettings?.sendWhenBillIsMade){
       setImmediate(async () => {
@@ -574,15 +587,19 @@ export const deleteBilling = async (req: Request, res: Response) => {
                 }
             }
         })
-        await prisma.log.create({
-            data: {
-                action: "DELETE",
-                entity: "Billing",
-                userId,
-                providerId,
-                message: `Bill with invoice no. ${bill?.invoiceNumber} deleted by ${user?.employee?.fullName || user?.provider.name || 'Unknown'}`
-            }
+
+        // ---- LOG ACTION (non-blocking) ----
+      prisma.log
+        .create({
+          data: {
+            action: "DELETE",
+            entity: "Billing",
+            userId,
+            message: `Bill with invoice no. ${bill?.invoiceNumber} deleted by ${user?.employee?.fullName || user?.provider.name || 'Unknown'}`,
+            providerId,
+          },
         })
+        .catch(console.error);
 
         return res.status(200).json({message: "Bill deleted successfully"})
     } catch (error) {
