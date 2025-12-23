@@ -215,13 +215,13 @@ enum PaymentStatus {
 
 model Provider {
   id               String        @id @default(uuid()) @db.Uuid
-  name             String        @unique
+  name             String 
   companyName      String
   companyAddress   String
   email            String        @unique
-  phoneNumber      String?
+  phoneNumber      String? 
   companyLogoUrl   String? @default("https://res.cloudinary.com/dyjappbhk/image/upload/v1762924997/default-logo_rrbvc5.png")
-  subscriptionStatus SubscriptionStatus @default(INACTIVE)
+  subscriptionStatus SubscriptionStatus @default(ACTIVE)
   xenditApiKey  String? @unique
   semaphoreApiKey String? @unique
 
@@ -237,6 +237,14 @@ model Provider {
   settings  Json? @default("{}")
   smsIntegrationSettings SmsIntegrationSettings?
 
+  
+  /// 🔗 Self relation (Parent → Branches)
+  parentProviderId String?  @db.Uuid
+  parentProvider   Provider? @relation("ProviderHierarchy", fields: [parentProviderId], references: [id])
+  branches         Provider[] @relation("ProviderHierarchy")
+  branchStatus BranchStatus @default(ACTIVE)
+  providerType ProviderType @default(MAIN)
+
   Ticket Ticket[]
 
   olts OLT[]
@@ -248,6 +256,16 @@ model Provider {
   odps ODP[]
 
   conversations Conversation[]
+}
+
+enum BranchStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ProviderType {
+  MAIN
+  BRANCH
 }
 
 model SmsIntegrationSettings {
@@ -278,7 +296,7 @@ model Coverage {
   longitude Float
   radius  Int? @default(200)
   providerId  String  @db.Uuid
-  provider Provider @relation(fields: [providerId], references: [id])
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
   
   clients Client[]
   accounts Accounts[]

@@ -1,30 +1,76 @@
 import e, { Request, Response } from 'express';
 import { validate as isUuid } from "uuid";
-import { UserRole } from '@prisma/client';
+import { ProviderType, UserRole } from '@prisma/client';
 import { decrypt, encrypt } from '../../../utils/hasher';
 import Xendit from 'xendit-node';
+import bcrypt from "bcryptjs";
 
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-export const getProviders = async (req: Request, res: Response) => {
+export const getProvider = async (req: Request, res: Response) => {
+    const {providerId} = req.user
     try {
-        const providers = await prisma.provider.findMany();
-        res.status(200).json(providers);
+        const provider = await prisma.provider.findUnique({
+            where: {
+                id: providerId
+            }
+        });
+        res.status(200).json(provider);
     } catch (error) {
         console.log(error);
         res.status(500).json({ message: 'Internal server error' });
     }
 }
 
-export const getProvider = async (req: Request, res: Response) => {
+export const getProviders = async (req: Request, res: Response) => {
     const {providerId} = req.user
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 10;
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+    const branchStatus =
+    typeof req.query.status === "string" && req.query.status !== "All"
+      ? req.query.status
+      : undefined;
+    
+    if (!providerId) {
+        return res.status(401).json({ message: "Provider ID not found in token" });
+    }
+
+    const skip = (page - 1) * limit;
+
     try {
-        const providers = await prisma.provider.findUnique({
-            where: { id: providerId }
+        const whereClause: any = {
+            parentProviderId: providerId,
+            ...(branchStatus && { branchStatus }),
+            ...(search && {
+                OR: [
+                { name: { contains: search, mode: "insensitive" } },
+                { email: { contains: search, mode: "insensitive" } },
+                { phoneNumber: { contains: search, mode: "insensitive" } }
+                ],
+            }),
+            };
+        const [providers, total] = await Promise.all([
+            prisma.provider.findMany({
+                where: whereClause,
+                include: {
+                    branches: true,
+                    clients: true
+                }
+            }),
+            prisma.provider.count({where: whereClause})
+        ])
+        return res.status(200).json({
+            data: providers,
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit),
+            },
         });
-        res.status(200).json(providers);
     } catch (error) {
         console.log(error);
         res.status(500).json({ message: 'Internal server error' });
@@ -60,6 +106,7 @@ export const createProvider = async (req: Request, res: Response) => {
         email,
         phoneNumber
     } = req.body;
+    const {providerId} = req.user
 
     const requiredFields: Record<string, unknown> = {name, companyName, companyAddress, email, phoneNumber};
 
@@ -87,7 +134,21 @@ export const createProvider = async (req: Request, res: Response) => {
         }
         
         const newProvider = await prisma.provider.create({
-            data: req.body
+            data: {
+                ...req.body,
+                parentProviderId: providerId,
+                providerType: ProviderType.BRANCH
+            }
+        })
+        const hashedPassword = await bcrypt.hash("admin123456", 10);
+        await prisma.user.create({
+            data: {
+                email,
+                password: hashedPassword,
+                fullName: name,
+                role: "SUPERADMIN",
+                providerId: newProvider.id
+            }
         })
 
         return res.status(201).json(newProvider);
@@ -138,6 +199,7 @@ export const updateProvider = async (req: Request, res: Response) => {
 }
 export const deleteProvider = async (req: Request, res: Response) => {
     const  { id } = req.params as { id: string }
+    const {providerId} = req.user
 
     if( !isUuid(id)) {
         return res.status(400).json({ message: 'Invalid provider ID format' })
@@ -145,7 +207,10 @@ export const deleteProvider = async (req: Request, res: Response) => {
     
     try {
         await prisma.provider.delete({
-            where: { id }
+            where: {
+                id,
+                parentProviderId: providerId
+            }
         })
 
         res.status(204).send();

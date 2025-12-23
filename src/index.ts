@@ -85,7 +85,7 @@ app.use("/api/upload-image", uploadImageRoute)
 app.use("/api/settings", settingsRoute)
 app.use("/api/network-hierarchy", hierarchyRoute)
 
-cron.schedule( "*/30 * * * * *", async () => {
+cron.schedule('0 0 * * *', async () => {
   console.log("Running test cron job:", new Date().toLocaleString());
   try {
     await checkOverdueInvoices();

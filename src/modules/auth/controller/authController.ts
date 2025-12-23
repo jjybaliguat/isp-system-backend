@@ -11,7 +11,14 @@ export const loginController = async (req: Request, res: Response) => {
 
     try {
         const user = await prisma.user.findUnique({
-            where: { email }
+            where: { email },
+            include: {
+                provider: {
+                    select: {
+                        providerType: true
+                    }
+                }
+            }
         })
 
         if(!user)
@@ -41,7 +48,7 @@ export const loginController = async (req: Request, res: Response) => {
         });
 
 
-        return res.status(200).json({ ...user, accessToken });
+        return res.status(200).json({ ...user, accessToken, providerType: user.provider.providerType });
     } catch (error) {
         console.log(error);
         return res.status(500).json({ message: "Internal server error" });
