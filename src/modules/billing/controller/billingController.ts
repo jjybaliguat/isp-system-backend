@@ -337,22 +337,27 @@ export const getBillingByAccountNumber = async (req: Request, res: Response) => 
         }
 
         const bill = await prisma.billing.findMany({
-            where: {
-                client: {
-                    accountNumber
-                },
-                status: "PENDING"
+          where: {
+            client: {
+              accountNumber: accountNumber,
             },
-            include: {
-                account: {
-                    include: {
-                        client: true
-                    }
-                },
+            OR: [
+              { status: "PENDING" },
+              { status: "OVERDUE" },
+              { status: "PARTIALLY_PAID" },
+            ],
+          },
+          include: {
+            account: {
+              include: {
                 client: true,
-                discounts: true
-            }
-        })
+              },
+            },
+            client: true,
+            discounts: true,
+          },
+        });
+
 
         return res.status(200).json(bill)
     } catch (error) {
