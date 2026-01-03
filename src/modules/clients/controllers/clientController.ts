@@ -1262,3 +1262,119 @@ export const getClientsPhoneNumbers = async(req: Request, res: Response) => {
         res.status(500).json({ error: 'Internal Server Error' });
     }
 }
+
+export const generateSoaReport = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { startDate, endDate } = req.query;
+
+    if (!id) {
+      return res.status(400).json({ message: "Client ID is required" });
+    }
+
+    // Convert query params to Date objects
+    const start = startDate ? new Date(startDate as string) : new Date("1970-01-01");
+    const end = endDate ? new Date(endDate as string) : new Date();
+
+    // Fetch client details with accounts, billings, payments, and discounts
+    const client = await prisma.client.findUnique({
+      where: { id },
+      include: {
+        provider: {
+            select: {
+                companyAddress: true,
+                companyLogoUrl: true,
+                companyName: true,
+                email: true,
+                phoneNumber: true
+            }
+        },
+        accounts: {
+          include: {
+            servicePlan: true,
+            billings: {
+              where: {
+                dueDate: {
+                  gte: start,
+                  lte: end,
+                },
+              },
+              include: {
+                discounts: true,
+                payments: true,
+              },
+              orderBy: { billingDate: "asc" },
+            },
+            payments: true,
+          },
+        },
+        servicePlan: true,
+        payments: true,
+      },
+    });
+
+    if (!client) {
+      return res.status(404).json({ message: "Client not found" });
+    }
+
+    // Map account billing history and calculate totals
+    const statement = client.accounts.map((account) => {
+      const billingHistory = account.billings.map((billing) => {
+        const totalDiscount = billing.discounts.reduce((sum, d) => sum + d.amount, 0);
+        const totalPaid = billing.payments.reduce((sum, p) => sum + Number(p.amount), 0);
+
+        return {
+          invoiceNumber: billing.invoiceNumber,
+          billingDate: billing.billingDate,
+          dueDate: billing.dueDate,
+          period: billing.period,
+          amount: billing.amount,
+          discount: totalDiscount,
+          paidAmount: totalPaid,
+          status: billing.status,
+        };
+      });
+
+      // Totals for the account
+      const totalBilled = billingHistory.reduce((sum, b) => sum + b.amount, 0);
+      const totalPaid = billingHistory.reduce((sum, b) => sum + b.paidAmount, 0);
+      const outstanding = totalBilled - totalPaid;
+
+      return {
+        accountNumber: account.accountNumber,
+        servicePlan: account.servicePlan?.name || "N/A",
+        billingHistory,
+        totalBilled,
+        totalPaid,
+        outstanding,
+      };
+    });
+
+    // Construct the SOA object ready for PDF export
+    const soa = {
+        provider: {
+            companyAddress: client.provider?.companyAddress,
+            companyLogoUrl: client.provider?.companyLogoUrl,
+            companyName: client.provider?.companyName,
+            email: client.provider?.email,
+            phoneNumber: client.provider?.phoneNumber
+        },
+      client: {
+        id: client.id,
+        fullName: client.fullName,
+        email: client.email,
+        phoneNumber: client.phoneNumber,
+        address: client.address,
+        accountNumbers: client.accounts.map((a) => a.accountNumber),
+      },
+      statement,
+      generatedAt: new Date(),
+      period: { start, end },
+    };
+
+    return res.status(200).json(soa);
+  } catch (error) {
+    console.error("Error generating SOA:", error);
+    return res.status(500).json({ message: "Failed to generate Statement of Account", error });
+  }
+};
