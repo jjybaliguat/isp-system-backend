@@ -1,52 +1,89 @@
 import { PrismaClient } from "@prisma/client";
 
-import { subMonths, startOfMonth, endOfMonth, startOfYear } from "date-fns"
+import { subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear } from "date-fns"
 import { Request, Response } from "express"
 import { getLocalDate } from "../../../utils/getTimeOffset"
 const prisma = new PrismaClient();
 
 export const getFinanceAnalytics = async (req: Request, res: Response) => {
     const {providerId} = req.user
-    // const {
-    //   year,
-    //   month
-    // } = req.body
+    const { year, month } = req.query as {
+      year?: string
+      month?: string
+    }
+
+    
+    const now = getLocalDate(new Date())
+    
+    const resolvedYear =
+    year && year !== "" ? Number(year) : now.getFullYear()
+
+    console.log(now.getFullYear(), resolvedYear)
+    
+    const resolvedMonth =
+    month && month !== ""
+    ? Number(month) - 1
+    : now.getMonth()
+
+    console.log(month)
+
+    const selectedDate = new Date(resolvedYear, resolvedMonth, 1)
+
+    const monthStart = startOfMonth(selectedDate)
+    const monthEnd = endOfMonth(selectedDate)
+    const yearStart = startOfYear(new Date(resolvedYear, 0, 1))
+    const yearEnd = endOfYear(new Date(resolvedYear, 0, 1))
 
     try {
-    // --- Define date ranges ---
-    const now = getLocalDate(new Date())
-    const monthStart = startOfMonth(now)
-    const monthEnd = endOfMonth(now)
-    const yearStart = startOfYear(now)
 
     // --- 1. REVENUE METRICS ---
     const totalMonthly = await prisma.payment.aggregate({
       _sum: { amount: true },
-      where: { client: {providerId}, status: "PAID", paidAt: { gte: monthStart, lte: monthEnd } },
+      where: 
+      { 
+        client: {providerId}, 
+        status: "PAID", 
+        paidAt: { gte: monthStart!, lte: monthEnd! },
+      },
     })
+    const paymentss = await prisma.payment.findMany({
+      where: {
+        client: { providerId },
+        status: "PAID",
+        paidAt: { gte: yearStart!, lte: yearEnd! },
+      },
+    })
+
+    console.log("Payments in year:", paymentss.length)
 
     const totalYTD = await prisma.payment.aggregate({
       _sum: { amount: true },
-      where: { client: {providerId}, status: "PAID", paidAt: { gte: yearStart, lte: now } },
+      where: {
+      client: { providerId },
+      status: "PAID",
+      paidAt: { gte: month !== "" ? monthStart : yearStart!, lte: month !== "" ? monthEnd! : yearEnd! },
+    },
     })
 
     // Group revenue by service plan
     const revenueByService = await prisma.payment.groupBy({
-      where: {client: {providerId}},
-      by: ["clientId"],
+      where: {account: {client: {providerId}}, status: "PAID" , 
+        paidAt: { gte: month !== "" ? monthStart : yearStart!, lte: month !== "" ? monthEnd! : yearEnd! },
+      },
+      by: ["accountId"],
       _sum: { amount: true },
     })
 
     const byServiceType: { name: string; value: number }[] = []
     for (const r of revenueByService) {
-      const client = await prisma.client.findUnique({
-        where: { id: r.clientId, providerId },
+      const account = await prisma.accounts.findUnique({
+        where: { id: r.accountId! },
         include: { servicePlan: true },
       })
-      if (client?.servicePlan) {
-        const existing = byServiceType.find((x) => x.name === client.servicePlan?.name)
+      if (account?.servicePlan) {
+        const existing = byServiceType.find((x) => x.name === account.servicePlan?.name)
         if (existing) existing.value += Number(r._sum.amount || 0)
-        else byServiceType.push({ name: client.servicePlan.name, value: Number(r._sum.amount || 0) })
+        else byServiceType.push({ name: account.servicePlan.name, value: Number(r._sum.amount || 0) })
       }
     }
 
@@ -69,12 +106,49 @@ export const getFinanceAnalytics = async (req: Request, res: Response) => {
     const avgPerClient = totalClients > 0 ? Number(totalYTD._sum.amount || 0) / totalClients : 0
 
     // --- 2. BILLING METRICS ---
-    const [totalInvoices, paid, pending, overdue, partialPayments] = await Promise.all([
-      prisma.billing.count({where: {client: {providerId}}}),
-      prisma.billing.count({ where: { client: {providerId}, status: "PAID" } }),
-      prisma.billing.count({ where: { client: {providerId}, status: "PENDING" } }),
-      prisma.billing.count({ where: { client: {providerId}, status: "OVERDUE" } }),
-      prisma.billing.count({ where: { client: {providerId}, status: "PARTIALLY_PAID" } }),
+    const dueDateFilter = {
+      dueDate: {
+        gte: month !== "" ? monthStart! : yearStart!,
+        lte: month !== "" ? monthEnd! : yearEnd!,
+      }
+    }
+
+    const [totalInvoices, paid, pending, overdue, partialPayments] =
+    await Promise.all([
+      prisma.billing.count({
+        where: {
+          client: { providerId },
+          ...dueDateFilter,
+        },
+      }),
+      prisma.billing.count({
+        where: {
+          client: { providerId },
+          status: "PAID",
+          ...dueDateFilter,
+        },
+      }),
+      prisma.billing.count({
+        where: {
+          client: { providerId },
+          status: "PENDING",
+          ...dueDateFilter,
+        },
+      }),
+      prisma.billing.count({
+        where: {
+          client: { providerId },
+          status: "OVERDUE",
+          ...dueDateFilter,
+        },
+      }),
+      prisma.billing.count({
+        where: {
+          client: { providerId },
+          status: "PARTIALLY_PAID",
+          ...dueDateFilter,
+        },
+      }),
     ])
 
     const overdueClientsRaw = await prisma.billing.findMany({
@@ -147,7 +221,13 @@ export const getFinanceAnalytics = async (req: Request, res: Response) => {
       .slice(0, 10)
 
     // --- 4. PAYMENT METHODS & COLLECTIONS ---
-    const payments = await prisma.payment.findMany({ where: { client: {providerId}, status: "PAID" } })
+    const payments = await prisma.payment.findMany({
+      where: {
+        client: { providerId },
+        status: "PAID",
+        paidAt: { gte: month !== "" ? monthStart : yearStart!, lte: month !== "" ? monthEnd! : yearEnd! },
+      },
+    })
 
     const methodMap: Record<string, { amount: number; count: number }> = {}
     payments.forEach((p) => {
