@@ -6,6 +6,6 @@ const router  = Router();
 
 router.get('/', authenticateProvider, getPayments);
 router.post('/:billingId', createPayment);
-router.post('/webhook', xenditWebhook);
+router.post('/xendit/pay-invoice', xenditWebhook);
 
 export default router;

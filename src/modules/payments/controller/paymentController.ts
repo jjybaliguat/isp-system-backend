@@ -148,8 +148,8 @@ export const createPayment = async (req: Request, res: Response) => {
           description: billing.description || `Payment for billing #${billing.client.accountNumber}`,
           amount: Number(amount || billing.amount),
           shouldSendEmail: true,
-          successRedirectUrl: "https://inventory.bitwisepctrading.com",
-          failureRedirectUrl: "https://logpay.bitwisepctrading.com"
+          successRedirectUrl: `https://sierracommunication.net/payment-success/${billing.id}`,
+          failureRedirectUrl: "https://sierracommunication.net/payment-failure",
         }
     });
 

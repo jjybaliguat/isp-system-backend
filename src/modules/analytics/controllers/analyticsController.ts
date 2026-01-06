@@ -16,23 +16,19 @@ export const getFinanceAnalytics = async (req: Request, res: Response) => {
     const now = getLocalDate(new Date())
     
     const resolvedYear =
-    year && year !== "" ? Number(year) : now.getFullYear()
-
-    console.log(now.getFullYear(), resolvedYear)
+    year && year !== "" ? Number(year) : 1970
     
     const resolvedMonth =
     month && month !== ""
     ? Number(month) - 1
     : now.getMonth()
 
-    console.log(month)
-
     const selectedDate = new Date(resolvedYear, resolvedMonth, 1)
 
     const monthStart = startOfMonth(selectedDate)
     const monthEnd = endOfMonth(selectedDate)
     const yearStart = startOfYear(new Date(resolvedYear, 0, 1))
-    const yearEnd = endOfYear(new Date(resolvedYear, 0, 1))
+    const yearEnd = endOfYear(new Date(year === "" ? now.getFullYear() : resolvedYear, 0, 1))
 
     try {
 

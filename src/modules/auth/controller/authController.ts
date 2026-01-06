@@ -46,6 +46,19 @@ export const loginController = async (req: Request, res: Response) => {
             domain: process.env.NODE_ENV === "production" ? ".sierracommunication.net" : undefined,
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
+        
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+        .create({
+            data: {
+            action: "LOGIN",
+            entity: "User",
+            userId: user.id,
+            message: `User ${user.email} has logged in.`,
+            providerId: user.providerId,
+            },
+        })
+        .catch(console.error);
 
 
         return res.status(200).json({ ...user, accessToken, providerType: user.provider.providerType });
@@ -157,6 +170,13 @@ export const refresh = asyncHandler( async (req: any, res: any)=> {
 
 export const logout = async (req: Request, res: Response) => {
     const cookies = req.cookies
+    const {id} = req.user as {id: string}
+
+    const user = await prisma.user.findUnique({
+        where: { id },
+    });
+    if(!user) return res.sendStatus(204) //No content
+
     if (!cookies?.jwt_refresh_secret) return res.sendStatus(204) //No content
     res.clearCookie(process.env.JWT_COOKIE_NAME!, { 
         httpOnly: true, 
@@ -164,6 +184,19 @@ export const logout = async (req: Request, res: Response) => {
         domain: process.env.NODE_ENV === "production" ? ".sierracommunication.net" : undefined,
         secure: process.env.NODE_ENV === "production", 
     })
+
+    // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+        .create({
+            data: {
+            action: "LOGOUT",
+            entity: "User",
+            userId: user.id,
+            message: `User ${user.email} has logged out.`,
+            providerId: user.providerId,
+            },
+        })
+        .catch(console.error);
     console.log("cookie cleared")
     res.json({ message: 'Cookie cleared' })
 }
