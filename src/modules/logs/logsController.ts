@@ -8,6 +8,7 @@ export const getLogs = async (req: Request, res: Response) => {
     const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
     const month = typeof req.query.month === "string" ? req.query.month : undefined;
     const year = typeof req.query.year === "string" ? req.query.year : undefined;
+    const entity = typeof req.query.entity === "string" ? req.query.entity : undefined;
 
     const providerId = req.user.providerId;
     const skip = (page - 1) * limit;
@@ -32,9 +33,6 @@ export const getLogs = async (req: Request, res: Response) => {
         if (search) {
         whereClause.OR = [
             {
-                entity: {contains: search, mode: 'insensitive'}
-            },
-            {
                 message: {contains: search, mode: 'insensitive'}
             },
             {
@@ -43,6 +41,9 @@ export const getLogs = async (req: Request, res: Response) => {
                 }
             }
         ];
+        }
+        if (entity) {
+            whereClause.entity = entity;
         }
 
         const [data, total] = await Promise.all([
