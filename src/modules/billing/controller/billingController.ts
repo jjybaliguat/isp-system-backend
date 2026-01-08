@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import {UAParser} from "ua-parser-js"
 import { getLocalDate } from "../../../utils/getTimeOffset";
 import { startOfYear, endOfYear, formatDate } from "date-fns";
-import { BillingStatus, PrismaClient } from "@prisma/client";
+import { BillingStatus, BillingType, PrismaClient } from "@prisma/client";
 import { validate as isUuid } from "uuid";
 import { sendInvoiceReminderEmail } from "../../../jobs/sendInvoiceReminderEmail";
 import { decrypt } from "../../../utils/hasher";
@@ -105,7 +105,10 @@ export const createBillingForAccount = async (req: Request, res: Response) => {
     amount,
     accountId,
     dueDate,
-    discounts = []
+    discounts = [],
+    billingType,
+    remarks,
+    billingCharges = [],
   } = req.body;
 
   const { id: userId, providerId } = req.user as { id: string; providerId: string };
@@ -178,11 +181,11 @@ export const createBillingForAccount = async (req: Request, res: Response) => {
       return sum + (isNaN(val) ? 0 : val);
     }, 0);
 
-    // Base amount from service plan if user doesn’t override it
-    const baseAmount = amount || account.servicePlan?.monthlyFee || 0;
+    // // Base amount from service plan if user doesn’t override it
+    // const baseAmount = amount || account.servicePlan?.monthlyFee || 0;
 
-    // Final amount = base amount – total discount
-    const finalAmount = amount? amount : Math.max(baseAmount - totalDiscount, 0);
+    // // Final amount = base amount – total discount
+    // const finalAmount = amount? amount : Math.max(baseAmount - totalDiscount, 0);
 
     // Create billing with nested discount create
     const billing = await prisma.billing.create({
@@ -190,11 +193,12 @@ export const createBillingForAccount = async (req: Request, res: Response) => {
         invoiceNumber,
         clientId: account.clientId,
         accountId,
-        amount: finalAmount,
+        amount,
         dueDate: billDuedate || new Date(new Date().setDate(account.billingDay!)),
         period,
         description: defaultDescription,
-
+        billingType,
+        remarks,
         // --- NEW: nested Prisma create for discounts ---
         discounts: {
           create: discounts.map((d: any) => ({
@@ -202,6 +206,13 @@ export const createBillingForAccount = async (req: Request, res: Response) => {
             amount: Number(d.amount) || 0,
           })),
         },
+        billingCharges: {
+          create: billingCharges.map((bc: any) => ({
+            name: bc.name,
+            amount: Number(bc.amount) || 0,
+            description: bc.description || null
+          }))
+        }
       },
       include: {
         discounts: true, // return discounts in response
@@ -259,7 +270,7 @@ export const createBillingForAccount = async (req: Request, res: Response) => {
 
 export const updateBillingForAccount = async (req: Request, res: Response) => {
   const { id } = req.params as { id: string }
-  const { accountId, period, amount, dueDate, discounts } = req.body
+  const { accountId, period, amount, dueDate, discounts, billingCharges, BillingType, remarks } = req.body
 
   if (!isUuid(id)) {
     return res.status(400).json({ message: "Invalid Billing ID format (UUID required)" })
@@ -277,12 +288,18 @@ export const updateBillingForAccount = async (req: Request, res: Response) => {
         data: {
           period,
           amount,
-          dueDate: billDuedate!
+          dueDate: billDuedate!,
+          billingType: BillingType,
+          remarks
         }
       })
 
       // 2️⃣ Delete old discounts
       await tx.discount.deleteMany({
+        where: { billingId: id }
+      })
+
+      await tx.billingCharges.deleteMany({
         where: { billingId: id }
       })
 
@@ -296,6 +313,16 @@ export const updateBillingForAccount = async (req: Request, res: Response) => {
           }))
         })
       }
+      if (Array.isArray(billingCharges) && billingCharges.length > 0) {
+        await tx.billingCharges.createMany({
+          data: billingCharges.map((bc: any) => ({
+            billingId: id,
+            name: bc.name,
+            amount: Number(bc.amount) || 0,
+            description: bc.description || null
+          }))
+        })
+      }
 
       // 4️⃣ Fetch final updated billing with relations + discounts
       const finalBilling = await tx.billing.findUnique({
@@ -306,7 +333,8 @@ export const updateBillingForAccount = async (req: Request, res: Response) => {
               client: true
             }
           },
-          discounts: true
+          discounts: true,
+          billingCharges: true
         }
       })
 
@@ -424,6 +452,7 @@ export const getBillings = async (req: Request, res: Response) => {
             where: whereClause,
             include: {
                 discounts: true,
+                billingCharges: true,
                 account: {
                     include: {
                         servicePlan: true,
@@ -502,6 +531,7 @@ export const getBillingById = async (req: Request, res: Response) => {
                         client: true
                     }
                 },
+                billingCharges: true,
                 discounts: true
             }
         })
@@ -1088,18 +1118,44 @@ export const generateBillingForAllAccounts = async (req: Request, res: Response)
           dueDate,
           description: defaultDescription,
           amount: account.servicePlan.monthlyFee,
-          status: BillingStatus.PENDING
+          status: BillingStatus.PENDING,
+          billingType: BillingType.REGULAR,
+          account
         }
       })
 
     if (billingsToCreate.length === 0) {
       return res.json({ message: "Billing already generated for this period" })
     }
+    
+    await prisma.$transaction(
+      billingsToCreate.map(b => {
+        const fee = Number(b.account.servicePlan!.monthlyFee || 0)
 
-    await prisma.billing.createMany({
-      data: billingsToCreate,
-      skipDuplicates: true
-    })
+        return prisma.billing.create({
+          data: {
+            invoiceNumber: b.invoiceNumber,
+            clientId: b.clientId,
+            accountId: b.accountId,
+            billingDate: b.billingDate,
+            period: b.period,
+            dueDate: b.dueDate,
+            description: b.description,
+            amount: fee,
+            status: b.status,
+            billingType: b.billingType,
+            billingCharges: {
+              create: [
+                {
+                  name: b.account.servicePlan!.name,
+                  amount: fee,
+                },
+              ],
+            },
+          },
+        })
+      })
+    )
 
     if(provider?.smsIntegrationSettings?.sendWhenBillIsMade){
         setImmediate(async () => {

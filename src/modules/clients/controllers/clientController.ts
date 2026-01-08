@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole } from "@prisma/client";
+import { BillingType, PrismaClient, UserRole } from "@prisma/client";
 import { Request, Response } from "express";
 import { logTransaction } from "../../../utils/logger";
 import { addMonths, startOfMonth, endOfMonth, addDays } from "date-fns";
@@ -539,7 +539,7 @@ export const createClient = async(req: Request, res: Response) => {
                 for (let i = 1; i <= 12; i++) {
                 const billMonth = addMonths(today, i);
                 const start = startOfMonth(billMonth);
-                const period = `Period ${billMonth.toLocaleString("default", { month: "long" })}`;
+                const period = `${billMonth.toLocaleString("default", { month: "long" })} ${billMonth.getFullYear()}`;
 
                 // Generate 12-digit invoice number starting with last 2 digits of year
                 const invoiceNumber = `${prefix}${billMonth.getFullYear().toString().slice(2)}${Math.floor(Math.random() * 1e10)
@@ -555,7 +555,16 @@ export const createClient = async(req: Request, res: Response) => {
                     dueDate: addDays(start, (client.billingDay!)),
                     period,
                     amount: monthlyPayment,
-                    description: `Monthly bill for ${billMonth.toLocaleString("default", { month: "long" })}-Acc-${client.accountNumber}`
+                    description: `Monthly bill for ${billMonth.toLocaleString("default", { month: "long" })}-Acc-${client.accountNumber}`,
+                    billingType: BillingType.REGULAR,
+                    billingCharges: {
+                        create: [
+                            {
+                                name: servicePlan.name,
+                                amount: servicePlan.monthlyFee,
+                            }
+                        ]
+                    }
                 }
                 });
             }
@@ -563,7 +572,7 @@ export const createClient = async(req: Request, res: Response) => {
             }
             case "ThisMonth": {
             const start = startOfMonth(today);
-            const period = `Period ${start.toLocaleString("default", { month: "long" })}`;
+            const period = `${start.toLocaleString("default", { month: "long" })} ${start.getFullYear()}`;
             const invoiceNumber = `${prefix}${today.getFullYear().toString().slice(2)}${Math.floor(Math.random()*1e10).toString().padStart(10,'0')}`;
             await prisma.billing.create({
                 data: {
@@ -574,7 +583,16 @@ export const createClient = async(req: Request, res: Response) => {
                 dueDate: addDays(start, (client.billingDay! - 1)),
                 period,
                 amount: monthlyPayment,
-                description: `Monthly bill for ${start.toLocaleString("default", { month: "long" })}-Acc-${client.accountNumber}`
+                description: `Monthly bill for ${start.toLocaleString("default", { month: "long" })}-Acc-${client.accountNumber}`,
+                billingType: BillingType.REGULAR,
+                billingCharges: {
+                    create: [
+                        {
+                            name: servicePlan.name,
+                            amount: servicePlan.monthlyFee,
+                        }
+                    ]
+                }
                 }
             });
             break;
@@ -583,7 +601,7 @@ export const createClient = async(req: Request, res: Response) => {
             case "NextMonth": {
             const nextMonth = addMonths(today, 1);
             const start = startOfMonth(nextMonth);
-            const period = `Period ${nextMonth.toLocaleString("default", { month: "long" })}`;
+            const period = `${nextMonth.toLocaleString("default", { month: "long" })} ${nextMonth.getFullYear()}`;
             const invoiceNumber = `${prefix}${today.getFullYear().toString().slice(2)}${Math.floor(Math.random()*1e10).toString().padStart(10,'0')}`;
             await prisma.billing.create({
                 data: {
@@ -594,7 +612,16 @@ export const createClient = async(req: Request, res: Response) => {
                 dueDate: addDays(start, (client.billingDay!)),
                 period,
                 amount: monthlyPayment,
-                description: `Monthly bill for ${nextMonth.toLocaleString("default", { month: "long" })}-Acc-${client.accountNumber}`
+                description: `Monthly bill for ${nextMonth.toLocaleString("default", { month: "long" })}-Acc-${client.accountNumber}`,
+                billingType: BillingType.REGULAR,
+                billingCharges: {
+                    create: [
+                        {
+                            name: servicePlan.name,
+                            amount: servicePlan.monthlyFee,
+                        }
+                    ]
+                }
                 }
             });
             break;
@@ -602,18 +629,33 @@ export const createClient = async(req: Request, res: Response) => {
 
             case "ProRated": {
             const amount = (monthlyPayment / 30) * Number(proRatedDays);
-            const period = `Prorated`;;
+            const period = `Prorated`;
             const invoiceNumber = `${prefix}${today.getFullYear().toString().slice(2)}${Math.floor(Math.random()*1e10).toString().padStart(10,'0')}`;
+
+            const dueDate = new Date(
+                today.getFullYear(),
+                today.getMonth() + 1,
+                Number(client.billingDay)
+            )
             await prisma.billing.create({
                 data: {
                 clientId: client.id,
                 accountId: account.id,
                 invoiceNumber,
                 billingDate: today,
-                dueDate: addDays(today, (client.billingDay! - 1)),
+                dueDate: dueDate,
                 period,
                 amount,
-                description: `ProRated bill for ${proRatedDays} days Acc-${client.accountNumber}`
+                description: `ProRated bill for ${proRatedDays} days Acc-${client.accountNumber}`,
+                billingType: BillingType.PRORATED,
+                billingCharges: {
+                    create: [
+                        {
+                            name: `ProRated - ${proRatedDays} days`,
+                            amount: amount,
+                        }
+                    ]
+                }
                 }
             });
             break;

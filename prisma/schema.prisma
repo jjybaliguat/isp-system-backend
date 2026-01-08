@@ -144,6 +144,9 @@ model Billing {
   paidAmount   Float?    @default(0)
   status       BillingStatus  @default(PENDING)
   description  String?
+  billingType BillingType? @default(REGULAR)
+  billingCharges BillingCharges[]
+  remarks      String?
 
   payments     Payment[]
 
@@ -152,6 +155,25 @@ model Billing {
   
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+}
+
+model BillingCharges {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String
+  amount      Float
+  description String?
+  billingId   String    @db.Uuid
+  billing Billing @relation(fields: [billingId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+enum BillingType {
+  REGULAR
+  PRORATED
+  INSTALLATION_FEE
+  LATE_FEE
 }
 
 model Discount {
