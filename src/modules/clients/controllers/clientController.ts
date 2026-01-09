@@ -1,7 +1,7 @@
 import { BillingType, PrismaClient, UserRole } from "@prisma/client";
 import { Request, Response } from "express";
 import { logTransaction } from "../../../utils/logger";
-import { addMonths, startOfMonth, endOfMonth, addDays } from "date-fns";
+import { addMonths, startOfMonth, endOfMonth, setDate, addDays, format } from "date-fns";
 import { validate as isUuid } from "uuid";
 import { decrypt } from "../../../utils/hasher";
 import { sendSms } from "../../../jobs/sendSms";
@@ -92,6 +92,7 @@ export const getClients = async (req: Request, res: Response) => {
                 billings: {
                     include: {
                         discounts: true,
+                        billingCharges: true,
                         account: {
                             include: {
                                 servicePlan: true
@@ -472,30 +473,49 @@ export const createClient = async(req: Request, res: Response) => {
             }
         })
 
-        if(provider?.smsIntegrationSettings?.sendWhenCustomerAdded){
-            console.log("Scheduling SMS notification for new client added...");
-            setImmediate(async () => {
-                try {
-                  const decryptedKey = decrypt(provider.semaphoreApiKey!);
-                  const messageTemplate = provider.smsIntegrationSettings?.sendWhenCustomerAddedTemplate || ""
-                  await sendSms(
-                    client.phoneNumber!,
-                    messageTemplate,
-                    {
-                      name: client.fullName,
-                      accNum: account.accountNumber,
-                      billingDay: account.billingDay!.toString() || "",
-                      companyName: provider.companyName || "",
-                      email: client.email || "",
-                      phone: client.phoneNumber || ""
-                    },
-                    decryptedKey
-                  );
-                } catch (error) {
-                  console.error("Error sending billing SMS:", error);
-                }
-            })
-        }
+        const nextMonth = addMonths(new Date(), 1);
+        const dueDate = format(
+        setDate(
+            nextMonth,
+            Math.min(
+            account.billingDay!,
+            endOfMonth(nextMonth).getDate()
+            )
+        ),
+        "MMMM dd, yyyy"
+        );
+
+        if (provider?.smsIntegrationSettings?.sendWhenCustomerAdded) {
+            console.log("Sending SMS notification for new client added...");
+
+            try {
+                const decryptedKey = decrypt(provider.semaphoreApiKey!);
+
+                const messageTemplate =
+                provider.smsIntegrationSettings?.sendWhenCustomerAddedTemplate || "";
+
+                await sendSms(
+                client.phoneNumber!,
+                messageTemplate,
+                {
+                    name: client.fullName,
+                    accNum: account.accountNumber,
+                    billingDay: account.billingDay?.toString() || "",
+                    companyName: provider.companyName || "",
+                    email: client.email || "",
+                    phone: client.phoneNumber || "",
+                    amount: client.servicePlan?.monthlyFee.toString() || "",
+                    link: "https://sierracommunication.net",
+                    dueDate
+                },
+                decryptedKey
+                );
+
+                console.log("SMS sent successfully.");
+            } catch (error) {
+                console.error("Error sending billing SMS:", error);
+            }
+            }
 
         
         if(odpPortId && odpPortId !== ""){
