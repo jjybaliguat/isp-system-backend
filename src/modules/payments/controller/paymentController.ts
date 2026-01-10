@@ -146,7 +146,7 @@ export const createPayment = async (req: Request, res: Response) => {
           externalId: billing.invoiceNumber,
           payerEmail: billing.client.email,
           description: billing.description || `Payment for billing #${billing.client.accountNumber}`,
-          amount: Number(amount || billing.amount),
+          amount: Number(amount),
           shouldSendEmail: true,
           successRedirectUrl: `https://sierracommunication.net/payment-success/${billing.id}`,
           failureRedirectUrl: "https://sierracommunication.net/payment-failure",
@@ -158,7 +158,8 @@ export const createPayment = async (req: Request, res: Response) => {
       data: {
         billingId: billing.id!,
         clientId: billing.clientId!,
-        amount: billing.amount!,
+        accountId: billing.accountId!,
+        amount: amount,
         paymentMethod: "XENDIT",
         xenditInvoiceId: invoice.id!,
         xenditPaymentUrl: invoice.invoiceUrl!,
@@ -179,14 +180,13 @@ export const createPayment = async (req: Request, res: Response) => {
 
 export const xenditWebhook = async (req: Request, res: Response) => {
     const {
-      id,
+      id: xenditPaymentId,
       status,
-      amount,
-      paid_amount,
+      amount,       // billed amount
+      paid_amount,  // customer paid (includes convenience fee)
       paid_at,
       payment_channel
     } = req.body;
-
     try {
       
       if(!status || !amount || !paid_amount || !paid_at || !payment_channel) {
@@ -194,20 +194,21 @@ export const xenditWebhook = async (req: Request, res: Response) => {
       }
 
       // Update payment status in DB
-      const payment = await prisma.payment.updateMany({
-        where: { xenditInvoiceId: id },
+      const payment = await prisma.payment.update({
+        where: { xenditInvoiceId: xenditPaymentId },
         data: {
-          status: status.toUpperCase(),
-          paidAt: status === "PAID" ? paid_at : null,
-          paymentChannel: status === "PAID" ? payment_channel : null,
-          recordedBy: "Payment Webhook Trigger"
+          status: "PAID",
+          paidAt: paid_at,
+          paymentChannel: payment_channel,
+          recordedBy: "Payment Webhook Trigger",
+          referenceId: xenditPaymentId,
         },
       });
 
       // If payment is successful, update billing status to PAID
       if (status === "PAID") {
         const updatedPayment = await prisma.payment.findFirst({
-          where: { xenditInvoiceId: id },
+          where: { xenditInvoiceId: xenditPaymentId },
           include: {
             account: true,
             billing: {
@@ -228,10 +229,43 @@ export const xenditWebhook = async (req: Request, res: Response) => {
         });
 
         if (updatedPayment) {
-          await prisma.billing.update({
+          const billing = await prisma.billing.findUnique({
             where: { id: updatedPayment.billingId },
-            data: { status: "PAID", paidAt: status === "PAID" ? paid_at : null },
-          });
+            include: {
+              payments: {
+                where: { status: "PAID" },
+              },
+            },
+          })
+
+          if (!billing) return
+
+          const totalPaid = billing.payments.reduce(
+            (sum, p) => sum + Number(p.amount),
+            0
+          )
+
+          const cappedPaidAmount = Math.min(
+            totalPaid,
+            billing.amount
+          )
+
+          await prisma.billing.update({
+            where: { id: billing.id },
+            data: {
+              paidAmount: cappedPaidAmount,
+              paidAt:
+                cappedPaidAmount >= billing.amount
+                  ? updatedPayment.paidAt
+                  : null,
+              status:
+                cappedPaidAmount >= billing.amount
+                  ? "PAID"
+                  : cappedPaidAmount > 0
+                  ? "PARTIALLY_PAID"
+                  : "PENDING",
+            },
+          })
 
           if(updatedPayment.client.provider?.smsIntegrationSettings?.sendWhenPaymentIsMade){
               // console.log("Scheduling SMS notification for new client added...");
