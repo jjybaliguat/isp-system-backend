@@ -4,6 +4,7 @@ exports.xenditWebhook = exports.createPayment = exports.getPayments = void 0;
 const xendit_node_1 = require("xendit-node");
 const hasher_1 = require("../../../utils/hasher");
 const client_1 = require("@prisma/client");
+const sendSms_1 = require("../../../jobs/sendSms");
 const prisma = new client_1.PrismaClient();
 const getPayments = async (req, res) => {
     const page = Number(req.query.page) || 1;
@@ -62,6 +63,17 @@ const getPayments = async (req, res) => {
                             fullName: true,
                             accountNumber: true,
                         },
+                    },
+                    account: {
+                        include: {
+                            client: {
+                                select: {
+                                    id: true,
+                                    fullName: true,
+                                    accountNumber: true,
+                                },
+                            },
+                        }
                     },
                     billing: {
                         select: {
@@ -125,8 +137,8 @@ const createPayment = async (req, res) => {
                 description: billing.description || `Payment for billing #${billing.client.accountNumber}`,
                 amount: Number(amount || billing.amount),
                 shouldSendEmail: true,
-                successRedirectUrl: "https://inventory.bitwisepctrading.com",
-                failureRedirectUrl: "https://logpay.bitwisepctrading.com"
+                successRedirectUrl: `https://sierracommunication.net/payment-success/${billing.id}`,
+                failureRedirectUrl: "https://sierracommunication.net/payment-failure",
             }
         });
         // Create Payment record in DB
@@ -173,12 +185,51 @@ const xenditWebhook = async (req, res) => {
         if (status === "PAID") {
             const updatedPayment = await prisma.payment.findFirst({
                 where: { xenditInvoiceId: id },
+                include: {
+                    account: true,
+                    billing: {
+                        select: {
+                            period: true
+                        }
+                    },
+                    client: {
+                        include: {
+                            provider: {
+                                include: {
+                                    smsIntegrationSettings: true
+                                }
+                            }
+                        }
+                    }
+                },
             });
             if (updatedPayment) {
                 await prisma.billing.update({
                     where: { id: updatedPayment.billingId },
-                    data: { status: "PAID" },
+                    data: { status: "PAID", paidAt: status === "PAID" ? paid_at : null },
                 });
+                if (updatedPayment.client.provider?.smsIntegrationSettings?.sendWhenPaymentIsMade) {
+                    // console.log("Scheduling SMS notification for new client added...");
+                    setImmediate(async () => {
+                        try {
+                            const decryptedKey = (0, hasher_1.decrypt)(updatedPayment.client.provider.semaphoreApiKey);
+                            const messageTemplate = updatedPayment.client.provider.smsIntegrationSettings?.sendWhenPaymentIsMadeTemplate || "";
+                            await (0, sendSms_1.sendSms)(updatedPayment.client.phoneNumber, messageTemplate, {
+                                name: updatedPayment.client.fullName || "",
+                                accNum: updatedPayment.account?.accountNumber || "",
+                                billingDay: updatedPayment.account?.billingDay.toString() || "",
+                                companyName: updatedPayment.client.provider.companyName || "",
+                                email: updatedPayment.client.email || "",
+                                phone: updatedPayment.client.phoneNumber || "",
+                                period: updatedPayment.billing?.period || "",
+                                amount: amount.toString(),
+                            }, decryptedKey);
+                        }
+                        catch (error) {
+                            console.error("Error sending billing SMS:", error);
+                        }
+                    });
+                }
             }
         }
         res.status(200).json({ message: "Payment status updated", payment });

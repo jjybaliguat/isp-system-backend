@@ -1,5 +1,8 @@
 import { Request, Response } from 'express';
 export declare const getNetworkHierarchy: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const getOdps: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const getOdpPorts: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const getOdpPort: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const createOlt: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const createPonPort: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const createLcp: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;

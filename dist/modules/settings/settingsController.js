@@ -26,7 +26,7 @@ const updateNotificationsSettings = async (req, res) => {
                 emailUser,
                 emailPass,
                 emailHost,
-                emailPort,
+                emailPort: Number(emailPort),
                 senderName,
                 invoiceReminderTemplate,
                 paymentConfirmationTemplate,

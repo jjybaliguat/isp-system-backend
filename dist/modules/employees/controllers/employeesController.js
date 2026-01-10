@@ -126,30 +126,36 @@ const updateEmployee = async (req, res) => {
     const { id } = req.params;
     const { id: userId, providerId } = req.user;
     const { fullName, email, address, phoneNumber, role, hireDate, status, teamId } = req.body;
-    const dateHired = new Date(hireDate);
-    if (isNaN(dateHired.getTime()))
-        return res.status(400).json({ message: "Hire Date is invalid date" });
+    const dataToUpdate = {};
+    if (fullName !== undefined)
+        dataToUpdate.fullName = fullName;
+    if (email !== undefined)
+        dataToUpdate.email = email;
+    if (address !== undefined)
+        dataToUpdate.address = address;
+    if (phoneNumber !== undefined)
+        dataToUpdate.phoneNumber = phoneNumber;
+    if (role !== undefined)
+        dataToUpdate.role = role;
+    if (status !== undefined)
+        dataToUpdate.status = status;
+    if (teamId !== undefined)
+        dataToUpdate.teamId = teamId || null;
+    // Handle hireDate separately since it needs validation
+    if (hireDate !== undefined) {
+        const dateHired = new Date(hireDate);
+        if (isNaN(dateHired.getTime())) {
+            return res.status(400).json({ message: "Hire Date is invalid" });
+        }
+        dataToUpdate.hireDate = dateHired;
+    }
     try {
         const user = await prisma.user.findUnique({
-            where: {
-                id: userId
-            }
+            where: { id: userId }
         });
         const updatedEmployee = await prisma.employees.update({
-            where: {
-                id,
-                providerId
-            },
-            data: {
-                fullName,
-                email,
-                address,
-                phoneNumber,
-                role,
-                hireDate: dateHired,
-                status,
-                teamId: teamId || null
-            }
+            where: { id, providerId },
+            data: dataToUpdate
         });
         await prisma.log.create({
             data: {
@@ -160,10 +166,10 @@ const updateEmployee = async (req, res) => {
                 message: `Employee ${updatedEmployee.fullName} updated by ${user?.fullName}`
             }
         });
-        return res.status(200).json(exports.updateEmployee);
+        return res.status(200).json(updatedEmployee);
     }
     catch (error) {
-        console.log(error);
+        console.error(error);
         return res.status(500).json({ message: "Internal Server Error" });
     }
 };

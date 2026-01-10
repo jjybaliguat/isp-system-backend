@@ -33,7 +33,7 @@ export const loginController = async (req: Request, res: Response) => {
         }, 15); // 15min
 
         const refreshToken = jwt.sign(
-            { "email": user.email },
+            { "email": user.email, "role": user.role },
             process.env.REFRESH_TOKEN_SECRET!,
             { expiresIn: '1hr' }
         )

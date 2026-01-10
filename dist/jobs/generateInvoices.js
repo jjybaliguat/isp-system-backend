@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateInvoices = void 0;
 const date_fns_1 = require("date-fns");
 const client_1 = require("@prisma/client");
+const date_fns_tz_1 = require("date-fns-tz");
 const prisma = new client_1.PrismaClient();
 const generateInvoices = async (providerId) => {
     try {
@@ -22,9 +23,24 @@ const generateInvoices = async (providerId) => {
             return;
         const settings = provider?.settings;
         const thresholdDaysBeforeDue = settings?.billing?.invoiceGenerationDaysBeforeDue || 0;
-        const clients = await prisma.client.findMany({
+        // const clients = await prisma.client.findMany({
+        //   where: {
+        //     providerId,
+        //     billingDay: todayDay + thresholdDaysBeforeDue,
+        //   },
+        //   include: {
+        //     servicePlan: {
+        //         select: {
+        //             monthlyFee: true
+        //         }
+        //     }
+        //   }
+        // });
+        const accounts = await prisma.accounts.findMany({
             where: {
-                providerId,
+                client: {
+                    providerId
+                },
                 billingDay: todayDay + thresholdDaysBeforeDue,
             },
             include: {
@@ -35,7 +51,7 @@ const generateInvoices = async (providerId) => {
                 }
             }
         });
-        if (clients.length === 0) {
+        if (accounts.length === 0) {
             console.log("No clients found for this tenant.");
             return;
         }
@@ -54,23 +70,47 @@ const generateInvoices = async (providerId) => {
                 lastNumber = parseInt(match[0]);
         }
         const prefix = settings?.invoiceDocument?.numberPrefix || 'INV-';
-        const newInvoices = clients.map((client, index) => {
+        const invoicePromises = accounts.map(async (account) => {
+            if (!account.billingDay)
+                return null;
+            // Generate unique invoice number
             const invoiceNumber = `${prefix}${today.getFullYear().toString().slice(2)}${Math.floor(Math.random() * 1e10).toString().padStart(10, '0')}`;
-            const dueDate = (0, date_fns_1.addDays)((start), (client.billingDay - 1));
+            // Calculate due date in Manila timezone
+            const dueDate = (0, date_fns_1.addDays)(start, account.billingDay - 1);
+            const startUtc = (0, date_fns_tz_1.toZonedTime)((0, date_fns_1.startOfDay)(dueDate), "Asia/Manila");
+            const endUtc = (0, date_fns_tz_1.toZonedTime)((0, date_fns_1.endOfDay)(dueDate), "Asia/Manila");
+            // Skip if a billing already exists
+            const existing = await prisma.billing.findFirst({
+                where: {
+                    accountId: account.id,
+                    dueDate: {
+                        gte: startUtc,
+                        lte: endUtc,
+                    },
+                },
+            });
+            if (existing)
+                return null;
             return {
                 invoiceNumber,
-                clientId: client.id,
+                clientId: account.clientId,
+                accountId: account.id,
                 billingDate: today,
                 period,
                 dueDate,
-                amount: client.servicePlan?.monthlyFee ?? 0, // assuming client has monthlyFee field
+                amount: account.servicePlan?.monthlyFee ?? 0,
                 description: `Monthly Internet Subscription for ${period}`,
             };
         });
-        await prisma.billing.createMany({
-            data: newInvoices,
-        });
-        console.log(`✅ Successfully generated ${newInvoices.length} invoices for ${period}`);
+        // Resolve all promises
+        const invoices = (await Promise.all(invoicePromises)).filter(Boolean);
+        // Insert all new invoices at once
+        if (invoices.length > 0) {
+            await prisma.billing.createMany({
+                data: invoices,
+            });
+        }
+        console.log(`✅ Successfully generated ${invoices.length} invoices for ${period}`);
     }
     catch (error) {
         console.error("❌ Error generating invoices:", error);

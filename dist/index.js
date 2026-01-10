@@ -29,6 +29,7 @@ const jobManager_1 = require("./jobs/jobManager");
 const node_cron_1 = __importDefault(require("node-cron"));
 const checkOverdueInvoices_1 = require("./jobs/checkOverdueInvoices");
 const client_1 = require("@prisma/client");
+const sendSmsWhenTheBillIsDue_1 = require("./jobs/sendSmsWhenTheBillIsDue");
 const prisma = new client_1.PrismaClient();
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
@@ -47,8 +48,16 @@ const PORT = process.env.PORT || 5000;
     }
 })();
 app.use((0, cors_1.default)({
-    origin: "http://localhost:3000",
-    credentials: true, // Allow cookies
+    origin: function (origin, callback) {
+        const allowedOrigins = ["http://localhost:3000", "https://sierracommunication.net", "https://www.sierracommunication.net", "https://sierracommunication.vercel.app"];
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        }
+        else {
+            callback(new Error("Not allowed by CORS"));
+        }
+    },
+    credentials: true,
 }));
 app.use(express_1.default.json());
 app.use((0, cookie_parser_1.default)());
@@ -72,11 +81,16 @@ app.use("/api/coverage", coverageRoute_1.default);
 app.use("/api/upload-image", uploadImageRoute_1.default);
 app.use("/api/settings", settingsRoute_1.default);
 app.use("/api/network-hierarchy", network_hierarchy_route_1.default);
-node_cron_1.default.schedule('0 0 * * *', () => {
-    (0, checkOverdueInvoices_1.checkOverdueInvoices)();
-}, {
-    timezone: "Asia/Manila"
-});
+node_cron_1.default.schedule('0 0 * * *', async () => {
+    console.log("Running test cron job:", new Date().toLocaleString());
+    try {
+        await (0, checkOverdueInvoices_1.checkOverdueInvoices)();
+        await (0, sendSmsWhenTheBillIsDue_1.sendSmsWhenTheBillIsDue)();
+    }
+    catch (error) {
+        console.error("Error in daily cron job:", error);
+    }
+}, { timezone: "Asia/Manila" });
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });

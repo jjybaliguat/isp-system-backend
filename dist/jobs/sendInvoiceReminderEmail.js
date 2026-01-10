@@ -17,8 +17,8 @@ async function sendInvoiceReminderEmail(templateMd, emailCredentials, recipient,
         const htmlBody = await marked.parse(compiledMd);
         const transporter = nodemailer_1.default.createTransport({
             host: emailCredentials.emailHost,
-            port: emailCredentials.emailPort,
-            secure: false,
+            port: emailCredentials.emailPort || 465,
+            secure: process.env.NODE_ENV === "production" ? true : false,
             auth: {
                 user: emailCredentials.emailUser,
                 pass: emailCredentials.emailPass,
@@ -30,7 +30,6 @@ async function sendInvoiceReminderEmail(templateMd, emailCredentials, recipient,
             subject,
             html: htmlBody,
         });
-        console.log("✅ Email sent successfully to", recipient);
     }
     catch (error) {
         console.error("❌ Failed to send email:", error);

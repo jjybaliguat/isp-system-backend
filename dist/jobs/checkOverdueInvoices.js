@@ -16,8 +16,13 @@ const checkOverdueInvoices = async () => {
             const endUtc = (0, date_fns_tz_1.toZonedTime)((0, date_fns_1.endOfDay)(targetLocalDate), "Asia/Manila");
             await prisma.billing.updateMany({
                 where: {
-                    client: {
-                        providerId: provider.id
+                    // client: {
+                    //     providerId: provider.id
+                    // },
+                    account: {
+                        client: {
+                            providerId: provider.id
+                        }
                     },
                     dueDate: {
                         lte: endUtc,

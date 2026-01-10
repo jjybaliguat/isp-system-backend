@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteOdpPort = exports.deleteOdp = exports.deleteOdc = exports.deleteLcp = exports.deletePonPort = exports.deleteOlt = exports.unAssignOdpPort = exports.assignOdpPort = exports.createOdpPort = exports.createOdp = exports.createOdc = exports.createLcp = exports.createPonPort = exports.createOlt = exports.getNetworkHierarchy = void 0;
+exports.deleteOdpPort = exports.deleteOdp = exports.deleteOdc = exports.deleteLcp = exports.deletePonPort = exports.deleteOlt = exports.unAssignOdpPort = exports.assignOdpPort = exports.createOdpPort = exports.createOdp = exports.createOdc = exports.createLcp = exports.createPonPort = exports.createOlt = exports.getOdpPort = exports.getOdpPorts = exports.getOdps = exports.getNetworkHierarchy = void 0;
 const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
 const getNetworkHierarchy = async (req, res) => {
@@ -25,6 +25,11 @@ const getNetworkHierarchy = async (req, res) => {
                                                 ports: {
                                                     include: {
                                                         client: true,
+                                                        account: {
+                                                            include: {
+                                                                client: true
+                                                            }
+                                                        }
                                                     },
                                                     orderBy: {
                                                         portNumber: 'asc'
@@ -32,29 +37,29 @@ const getNetworkHierarchy = async (req, res) => {
                                                 }
                                             },
                                         },
-                                    },
+                                    }
                                 },
-                            },
-                        },
-                    },
-                },
-                lcps: {
-                    include: {
-                        odcs: {
-                            include: {
                                 odps: {
                                     include: {
                                         ports: {
                                             include: {
                                                 client: true,
+                                                account: {
+                                                    include: {
+                                                        client: true
+                                                    }
+                                                }
                                             },
+                                            orderBy: {
+                                                portNumber: 'asc'
+                                            }
                                         }
                                     },
                                 },
                             },
                         },
                     },
-                },
+                }
             },
         });
         return res.status(200).json(olts);
@@ -65,8 +70,72 @@ const getNetworkHierarchy = async (req, res) => {
     }
 };
 exports.getNetworkHierarchy = getNetworkHierarchy;
-const createOlt = async (req, res) => {
+const getOdps = async (req, res) => {
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
     const { providerId } = req.user;
+    try {
+        const odps = await prisma.oDP.findMany({
+            where: {
+                providerId,
+                odpCode: {
+                    contains: search,
+                    mode: "insensitive"
+                }
+            }
+        });
+        return res.status(200).json(odps);
+    }
+    catch (error) {
+        console.log(error);
+        return res.status(500).json({ message: "Internal Server Error" });
+    }
+};
+exports.getOdps = getOdps;
+const getOdpPorts = async (req, res) => {
+    const odpId = typeof req.query.odpId === "string" ? req.query.odpId.trim() : "";
+    const { providerId } = req.user;
+    try {
+        const odpPorts = await prisma.odpPort.findMany({
+            where: {
+                odp: {
+                    id: odpId,
+                    providerId
+                }
+            },
+            include: {
+                odp: true
+            },
+            orderBy: {
+                portNumber: "asc"
+            }
+        });
+        return res.status(200).json(odpPorts);
+    }
+    catch (error) {
+        console.log(error);
+        return res.status(500).json({ message: "Internal Server Error" });
+    }
+};
+exports.getOdpPorts = getOdpPorts;
+const getOdpPort = async (req, res) => {
+    const accountId = typeof req.query.odpId === "string" ? req.query.odpId.trim() : "";
+    const { providerId } = req.user;
+    try {
+        const odpPort = await prisma.odpPort.findUnique({
+            where: {
+                accountId
+            }
+        });
+        return res.status(200).json(odpPort);
+    }
+    catch (error) {
+        console.log(error);
+        return res.status(500).json({ message: "Internal Server Error" });
+    }
+};
+exports.getOdpPort = getOdpPort;
+const createOlt = async (req, res) => {
+    const { id: userId, providerId } = req.user;
     const body = req.body;
     const { latitude, longitude, ponCount } = body;
     try {
@@ -86,6 +155,18 @@ const createOlt = async (req, res) => {
         await prisma.ponPort.createMany({
             data: ponPortsData,
         });
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+            .create({
+            data: {
+                action: "CREATE",
+                entity: "Network",
+                userId,
+                message: `Network OLT created`,
+                providerId,
+            },
+        })
+            .catch(console.error);
         return res.status(201).json(olt);
     }
     catch (error) {
@@ -95,7 +176,7 @@ const createOlt = async (req, res) => {
 };
 exports.createOlt = createOlt;
 const createPonPort = async (req, res) => {
-    const { providerId } = req.user;
+    const { id: userId, providerId } = req.user;
     const body = req.body;
     const { oltId } = body;
     const { portNumber } = body;
@@ -114,6 +195,18 @@ const createPonPort = async (req, res) => {
                 portNumber: Number(portNumber)
             }
         });
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+            .create({
+            data: {
+                action: "CREATE",
+                entity: "Network",
+                userId,
+                message: `Network PON Port created`,
+                providerId,
+            },
+        })
+            .catch(console.error);
         return res.status(201).json(ponPort);
     }
     catch (error) {
@@ -123,7 +216,7 @@ const createPonPort = async (req, res) => {
 };
 exports.createPonPort = createPonPort;
 const createLcp = async (req, res) => {
-    const { providerId } = req.user;
+    const { id: userId, providerId } = req.user;
     const body = req.body;
     const { latitude, longitude, ponPortId } = body;
     const lat = Number(latitude);
@@ -144,6 +237,18 @@ const createLcp = async (req, res) => {
                 providerId
             }
         });
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+            .create({
+            data: {
+                action: "CREATE",
+                entity: "Network",
+                userId,
+                message: `Network LCP created`,
+                providerId,
+            },
+        })
+            .catch(console.error);
         return res.status(201).json(lcp);
     }
     catch (error) {
@@ -153,7 +258,7 @@ const createLcp = async (req, res) => {
 };
 exports.createLcp = createLcp;
 const createOdc = async (req, res) => {
-    const { providerId } = req.user;
+    const { id: userId, providerId } = req.user;
     const body = req.body;
     const { latitude, longitude } = body;
     const lat = Number(latitude);
@@ -167,6 +272,18 @@ const createOdc = async (req, res) => {
                 providerId
             }
         });
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+            .create({
+            data: {
+                action: "CREATE",
+                entity: "Network",
+                userId,
+                message: `Network ODC created`,
+                providerId,
+            },
+        })
+            .catch(console.error);
         return res.status(201).json(odc);
     }
     catch (error) {
@@ -176,16 +293,29 @@ const createOdc = async (req, res) => {
 };
 exports.createOdc = createOdc;
 const createOdp = async (req, res) => {
-    const { providerId } = req.user;
+    const { id: userId, providerId } = req.user;
     const body = req.body;
     const { latitude, longitude, portCount } = body;
+    const { odcId, lcpId } = body;
     const lat = Number(latitude);
     const lng = Number(longitude);
     const count = Number(portCount);
     try {
+        const lcp = await prisma.lCP.findUnique({
+            where: {
+                id: lcpId
+            }
+        });
+        const odc = await prisma.oDC.findUnique({
+            where: {
+                id: odcId
+            }
+        });
         const odp = await prisma.oDP.create({
             data: {
                 ...body,
+                odcId: odc ? odc.id : undefined,
+                lcpId: lcp ? lcp.id : undefined,
                 latitude: lat,
                 longitude: lng,
                 portCount: count,
@@ -199,6 +329,18 @@ const createOdp = async (req, res) => {
         await prisma.odpPort.createMany({
             data: portsData,
         });
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+            .create({
+            data: {
+                action: "CREATE",
+                entity: "Network",
+                userId,
+                message: `Network ODP created`,
+                providerId,
+            },
+        })
+            .catch(console.error);
         return res.status(201).json(odp);
     }
     catch (error) {
@@ -209,6 +351,7 @@ const createOdp = async (req, res) => {
 exports.createOdp = createOdp;
 const createOdpPort = async (req, res) => {
     const { portNumber, odpId } = req.body;
+    const { id: userId, providerId } = req.user;
     try {
         const isPortExist = await prisma.odpPort.findFirst({
             where: {
@@ -225,6 +368,18 @@ const createOdpPort = async (req, res) => {
                 odpId
             }
         });
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+            .create({
+            data: {
+                action: "CREATE",
+                entity: "Network",
+                userId,
+                message: `Network ODP Port created`,
+                providerId,
+            },
+        })
+            .catch(console.error);
         return res.status(201).json(odpPort);
     }
     catch (error) {
@@ -234,24 +389,51 @@ const createOdpPort = async (req, res) => {
 };
 exports.createOdpPort = createOdpPort;
 const assignOdpPort = async (req, res) => {
-    const { clientId, portId } = req.body;
+    const { accountId, portId } = req.body;
+    const { id: userId, providerId } = req.user;
     try {
-        const client = await prisma.client.findUnique({
+        const account = await prisma.accounts.findUnique({
             where: {
-                id: clientId
+                id: accountId
+            },
+            include: {
+                client: {
+                    select: {
+                        fullName: true
+                    }
+                }
             }
         });
-        if (!client)
+        if (!account)
             return res.status(400).json({ message: "Client not found." });
-        await prisma.odpPort.update({
+        const odpPort = await prisma.odpPort.update({
             where: {
                 id: portId
             },
             data: {
-                clientId,
+                accountId,
                 status: "OCCUPIED"
+            },
+            include: {
+                odp: {
+                    select: {
+                        odpCode: true
+                    }
+                }
             }
         });
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+            .create({
+            data: {
+                action: "ASSIGN",
+                entity: "Network",
+                userId,
+                message: `Network ODP ${odpPort.odp.odpCode} Port ${odpPort.portNumber} assigned to client ${account.client.fullName}`,
+                providerId,
+            },
+        })
+            .catch(console.error);
         return res.status(200).json({ message: "Port assigned to client successfully" });
     }
     catch (error) {
@@ -261,17 +443,53 @@ const assignOdpPort = async (req, res) => {
 };
 exports.assignOdpPort = assignOdpPort;
 const unAssignOdpPort = async (req, res) => {
-    const { clientId } = req.body;
+    const { accountId } = req.body;
+    const { id: userId, providerId } = req.user;
     try {
-        await prisma.odpPort.update({
+        const odpPort = await prisma.odpPort.findUnique({
             where: {
-                clientId
+                accountId
+            },
+            include: {
+                account: {
+                    include: {
+                        client: true
+                    }
+                }
+            }
+        });
+        if (!odpPort) {
+            return res.status(400).json({ message: "ODP Port not found." });
+        }
+        const odpPortUpdated = await prisma.odpPort.update({
+            where: {
+                accountId
             },
             data: {
                 clientId: null,
+                accountId: null,
                 status: "AVAILABLE"
+            },
+            include: {
+                odp: {
+                    select: {
+                        odpCode: true
+                    }
+                }
             }
         });
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+            .create({
+            data: {
+                action: "UNASSIGN",
+                entity: "Network",
+                userId,
+                message: `Network ODP ${odpPortUpdated.odp.odpCode} Port ${odpPortUpdated.portNumber} unassigned to client ${odpPort.account?.client.fullName}`,
+                providerId,
+            },
+        })
+            .catch(console.error);
         return res.status(200).json({ message: "Port unassigned to client successfully" });
     }
     catch (error) {

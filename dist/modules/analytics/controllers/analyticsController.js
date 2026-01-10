@@ -7,43 +7,63 @@ const getTimeOffset_1 = require("../../../utils/getTimeOffset");
 const prisma = new client_1.PrismaClient();
 const getFinanceAnalytics = async (req, res) => {
     const { providerId } = req.user;
-    // const {
-    //   year,
-    //   month
-    // } = req.body
+    const { year, month } = req.query;
+    const now = (0, getTimeOffset_1.getLocalDate)(new Date());
+    const resolvedYear = year && year !== "" ? Number(year) : 1970;
+    const resolvedMonth = month && month !== ""
+        ? Number(month) - 1
+        : now.getMonth();
+    const selectedDate = new Date(resolvedYear, resolvedMonth, 1);
+    const monthStart = (0, date_fns_1.startOfMonth)(selectedDate);
+    const monthEnd = (0, date_fns_1.endOfMonth)(selectedDate);
+    const yearStart = (0, date_fns_1.startOfYear)(new Date(resolvedYear, 0, 1));
+    const yearEnd = (0, date_fns_1.endOfYear)(new Date(year === "" ? now.getFullYear() : resolvedYear, 0, 1));
     try {
-        // --- Define date ranges ---
-        const now = (0, getTimeOffset_1.getLocalDate)(new Date());
-        const monthStart = (0, date_fns_1.startOfMonth)(now);
-        const monthEnd = (0, date_fns_1.endOfMonth)(now);
-        const yearStart = (0, date_fns_1.startOfYear)(now);
         // --- 1. REVENUE METRICS ---
         const totalMonthly = await prisma.payment.aggregate({
             _sum: { amount: true },
-            where: { client: { providerId }, status: "PAID", paidAt: { gte: monthStart, lte: monthEnd } },
+            where: {
+                client: { providerId },
+                status: "PAID",
+                paidAt: { gte: monthStart, lte: monthEnd },
+            },
         });
+        const paymentss = await prisma.payment.findMany({
+            where: {
+                client: { providerId },
+                status: "PAID",
+                paidAt: { gte: yearStart, lte: yearEnd },
+            },
+        });
+        console.log("Payments in year:", paymentss.length);
         const totalYTD = await prisma.payment.aggregate({
             _sum: { amount: true },
-            where: { client: { providerId }, status: "PAID", paidAt: { gte: yearStart, lte: now } },
+            where: {
+                client: { providerId },
+                status: "PAID",
+                paidAt: { gte: month !== "" ? monthStart : yearStart, lte: month !== "" ? monthEnd : yearEnd },
+            },
         });
         // Group revenue by service plan
         const revenueByService = await prisma.payment.groupBy({
-            where: { client: { providerId } },
-            by: ["clientId"],
+            where: { account: { client: { providerId } }, status: "PAID",
+                paidAt: { gte: month !== "" ? monthStart : yearStart, lte: month !== "" ? monthEnd : yearEnd },
+            },
+            by: ["accountId"],
             _sum: { amount: true },
         });
         const byServiceType = [];
         for (const r of revenueByService) {
-            const client = await prisma.client.findUnique({
-                where: { id: r.clientId, providerId },
+            const account = await prisma.accounts.findUnique({
+                where: { id: r.accountId },
                 include: { servicePlan: true },
             });
-            if (client?.servicePlan) {
-                const existing = byServiceType.find((x) => x.name === client.servicePlan?.name);
+            if (account?.servicePlan) {
+                const existing = byServiceType.find((x) => x.name === account.servicePlan?.name);
                 if (existing)
                     existing.value += Number(r._sum.amount || 0);
                 else
-                    byServiceType.push({ name: client.servicePlan.name, value: Number(r._sum.amount || 0) });
+                    byServiceType.push({ name: account.servicePlan.name, value: Number(r._sum.amount || 0) });
             }
         }
         // Revenue trend (past 12 months)
@@ -63,12 +83,47 @@ const getFinanceAnalytics = async (req, res) => {
         const totalClients = await prisma.client.count({ where: { providerId } });
         const avgPerClient = totalClients > 0 ? Number(totalYTD._sum.amount || 0) / totalClients : 0;
         // --- 2. BILLING METRICS ---
+        const dueDateFilter = {
+            dueDate: {
+                gte: month !== "" ? monthStart : yearStart,
+                lte: month !== "" ? monthEnd : yearEnd,
+            }
+        };
         const [totalInvoices, paid, pending, overdue, partialPayments] = await Promise.all([
-            prisma.billing.count({ where: { client: { providerId } } }),
-            prisma.billing.count({ where: { client: { providerId }, status: "PAID" } }),
-            prisma.billing.count({ where: { client: { providerId }, status: "PENDING" } }),
-            prisma.billing.count({ where: { client: { providerId }, status: "OVERDUE" } }),
-            prisma.billing.count({ where: { client: { providerId }, status: "PARTIALLY_PAID" } }),
+            prisma.billing.count({
+                where: {
+                    client: { providerId },
+                    ...dueDateFilter,
+                },
+            }),
+            prisma.billing.count({
+                where: {
+                    client: { providerId },
+                    status: "PAID",
+                    ...dueDateFilter,
+                },
+            }),
+            prisma.billing.count({
+                where: {
+                    client: { providerId },
+                    status: "PENDING",
+                    ...dueDateFilter,
+                },
+            }),
+            prisma.billing.count({
+                where: {
+                    client: { providerId },
+                    status: "OVERDUE",
+                    ...dueDateFilter,
+                },
+            }),
+            prisma.billing.count({
+                where: {
+                    client: { providerId },
+                    status: "PARTIALLY_PAID",
+                    ...dueDateFilter,
+                },
+            }),
         ]);
         const overdueClientsRaw = await prisma.billing.findMany({
             where: { client: { providerId }, status: "OVERDUE" },
@@ -129,7 +184,13 @@ const getFinanceAnalytics = async (req, res) => {
             .sort((a, b) => b.amount - a.amount)
             .slice(0, 10);
         // --- 4. PAYMENT METHODS & COLLECTIONS ---
-        const payments = await prisma.payment.findMany({ where: { client: { providerId }, status: "PAID" } });
+        const payments = await prisma.payment.findMany({
+            where: {
+                client: { providerId },
+                status: "PAID",
+                paidAt: { gte: month !== "" ? monthStart : yearStart, lte: month !== "" ? monthEnd : yearEnd },
+            },
+        });
         const methodMap = {};
         payments.forEach((p) => {
             const key = p.paymentMethod || "Unknown";

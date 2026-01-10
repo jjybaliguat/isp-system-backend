@@ -51,13 +51,13 @@ async function registerTenantJobs(providerId, providerName) {
         {
             key: providerId,
             type: "invoice",
-            schedule: "5 0 * * *", // every 8am
+            schedule: "0 0 * * *", // every day at 12:00 AM
             task: () => (0, generateInvoices_1.generateInvoices)(providerId),
         },
         {
             key: `${providerId}-reminder`,
             type: "reminder",
-            schedule: "5 0 * * *", // 8:30am
+            schedule: "0 0 * * *", // every day at 12:00 AM
             task: () => (0, sendInvoiceReminders_1.sendInvoiceReminders)(providerId),
         },
     ];

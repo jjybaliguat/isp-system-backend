@@ -31,8 +31,8 @@ const getServicePlans = async (req, res) => {
 };
 exports.getServicePlans = getServicePlans;
 const createServicePlan = async (req, res) => {
-    const { providerId } = req.user;
     const { name, speedMbps, monthlyFee, descriptions } = req.body;
+    const { id: userId, providerId } = req.user;
     if (!name || !speedMbps || !monthlyFee)
         return res.status(400).json({ message: "Missing required fields" });
     try {
@@ -45,6 +45,18 @@ const createServicePlan = async (req, res) => {
                 providerId
             }
         });
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+            .create({
+            data: {
+                action: "CREATE",
+                entity: "Service Plan",
+                userId,
+                message: `Service Plan ${servicePlan.name} created`,
+                providerId,
+            },
+        })
+            .catch(console.error);
         return res.status(200).json(servicePlan);
     }
     catch (error) {
@@ -54,7 +66,7 @@ const createServicePlan = async (req, res) => {
 };
 exports.createServicePlan = createServicePlan;
 const updateServicePlan = async (req, res) => {
-    const { providerId } = req.user;
+    const { id: userId, providerId } = req.user;
     const { id } = req.params;
     const body = req.body;
     try {
@@ -65,7 +77,19 @@ const updateServicePlan = async (req, res) => {
             },
             data: body
         });
-        return res.status(200).json(exports.updateServicePlan);
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+            .create({
+            data: {
+                action: "UPDATE",
+                entity: "Service Plan",
+                userId,
+                message: `Service Plan ${updatedPlan.name} updated`,
+                providerId,
+            },
+        })
+            .catch(console.error);
+        return res.status(200).json(updatedPlan);
     }
     catch (error) {
         console.log(error);
@@ -74,15 +98,35 @@ const updateServicePlan = async (req, res) => {
 };
 exports.updateServicePlan = updateServicePlan;
 const deleteServicePlan = async (req, res) => {
-    const { providerId } = req.user;
+    const { id: userId, providerId } = req.user;
     const { id } = req.params;
     try {
+        const servicePlan = await prisma.servicePlan.findUnique({
+            where: {
+                id,
+                providerId
+            }
+        });
+        if (!servicePlan)
+            return res.status(404).json({ message: "Service plan not found" });
         await prisma.servicePlan.delete({
             where: {
                 id,
                 providerId
             }
         });
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+            .create({
+            data: {
+                action: "DELETE",
+                entity: "Service Plan",
+                userId,
+                message: `Service Plan ${servicePlan.name} deleted`,
+                providerId,
+            },
+        })
+            .catch(console.error);
         return res.status(200).json({ message: "Service plan deleted successfully" });
     }
     catch (error) {

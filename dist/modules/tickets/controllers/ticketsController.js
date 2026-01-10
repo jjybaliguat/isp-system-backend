@@ -98,7 +98,7 @@ exports.getTickets = getTickets;
 const createTicket = async (req, res) => {
     const body = req.body;
     const { dueDate } = body;
-    const { id, providerId } = req.user;
+    const { id: userId, providerId } = req.user;
     try {
         let parsedDueDate = null;
         if (dueDate) {
@@ -115,9 +115,21 @@ const createTicket = async (req, res) => {
                 ...body,
                 dueDate: parsedDueDate,
                 providerId,
-                createdById: id
+                createdById: userId
             }
         });
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+            .create({
+            data: {
+                action: "CREATE",
+                entity: "Ticket",
+                userId,
+                message: `Ticket ${ticket.subject} created`,
+                providerId,
+            },
+        })
+            .catch(console.error);
         return res.status(200).json(ticket);
     }
     catch (error) {
@@ -206,6 +218,18 @@ const updateTicket = async (req, res) => {
                 },
             });
         }
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+            .create({
+            data: {
+                action: "UPDATE",
+                entity: "Ticket",
+                userId,
+                message: `Ticket ${updatedTicket.subject} updated`,
+                providerId,
+            },
+        })
+            .catch(console.error);
         return res.status(200).json(updatedTicket);
     }
     catch (error) {
@@ -253,6 +277,7 @@ const getTicketLogs = async (req, res) => {
 exports.getTicketLogs = getTicketLogs;
 const deleteTicket = async (req, res) => {
     const { id } = req.params;
+    const { id: userId, providerId } = req.user;
     try {
         const ticket = await prisma.ticket.findUnique({
             where: {
@@ -282,6 +307,18 @@ const deleteTicket = async (req, res) => {
                 });
             });
         }
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+            .create({
+            data: {
+                action: "DELETE",
+                entity: "Ticket",
+                userId,
+                message: `Ticket ${ticket?.subject} deleted`,
+                providerId,
+            },
+        })
+            .catch(console.error);
         return res.status(200).json({ message: "Ticket deleted successfully" });
     }
     catch (error) {

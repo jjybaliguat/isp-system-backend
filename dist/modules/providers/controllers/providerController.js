@@ -3,31 +3,23 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateAccount = exports.testSemaphoreConnection = exports.testXenditConnection = exports.getStoredKey = exports.updateSemaphoreKey = exports.updateXenditKey = exports.deleteProvider = exports.updateProvider = exports.createProvider = exports.getProviderById = exports.getProvider = exports.getProviders = void 0;
+exports.getSmsIntegrationSettings = exports.createSmsIntegrationSettings = exports.updateAccount = exports.testSemaphoreConnection = exports.testXenditConnection = exports.getStoredKey = exports.updateSemaphoreKey = exports.updateXenditKey = exports.deleteProvider = exports.updateProvider = exports.createProvider = exports.getProviderById = exports.getProviders = exports.getProvider = void 0;
 const uuid_1 = require("uuid");
 const client_1 = require("@prisma/client");
 const hasher_1 = require("../../../utils/hasher");
 const xendit_node_1 = __importDefault(require("xendit-node"));
+const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const client_2 = require("@prisma/client");
 const prisma = new client_2.PrismaClient();
-const getProviders = async (req, res) => {
-    try {
-        const providers = await prisma.provider.findMany();
-        res.status(200).json(providers);
-    }
-    catch (error) {
-        console.log(error);
-        res.status(500).json({ message: 'Internal server error' });
-    }
-};
-exports.getProviders = getProviders;
 const getProvider = async (req, res) => {
     const { providerId } = req.user;
     try {
-        const providers = await prisma.provider.findUnique({
-            where: { id: providerId }
+        const provider = await prisma.provider.findUnique({
+            where: {
+                id: providerId
+            }
         });
-        res.status(200).json(providers);
+        res.status(200).json(provider);
     }
     catch (error) {
         console.log(error);
@@ -35,6 +27,56 @@ const getProvider = async (req, res) => {
     }
 };
 exports.getProvider = getProvider;
+const getProviders = async (req, res) => {
+    const { providerId } = req.user;
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 10;
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+    const branchStatus = typeof req.query.status === "string" && req.query.status !== "All"
+        ? req.query.status
+        : undefined;
+    if (!providerId) {
+        return res.status(401).json({ message: "Provider ID not found in token" });
+    }
+    const skip = (page - 1) * limit;
+    try {
+        const whereClause = {
+            parentProviderId: providerId,
+            ...(branchStatus && { branchStatus }),
+            ...(search && {
+                OR: [
+                    { name: { contains: search, mode: "insensitive" } },
+                    { email: { contains: search, mode: "insensitive" } },
+                    { phoneNumber: { contains: search, mode: "insensitive" } }
+                ],
+            }),
+        };
+        const [providers, total] = await Promise.all([
+            prisma.provider.findMany({
+                where: whereClause,
+                include: {
+                    branches: true,
+                    clients: true
+                }
+            }),
+            prisma.provider.count({ where: whereClause })
+        ]);
+        return res.status(200).json({
+            data: providers,
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit),
+            },
+        });
+    }
+    catch (error) {
+        console.log(error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+exports.getProviders = getProviders;
 const getProviderById = async (req, res) => {
     const { id } = req.params;
     try {
@@ -57,6 +99,7 @@ const getProviderById = async (req, res) => {
 exports.getProviderById = getProviderById;
 const createProvider = async (req, res) => {
     const { name, companyName, companyAddress, email, phoneNumber } = req.body;
+    const { providerId } = req.user;
     const requiredFields = { name, companyName, companyAddress, email, phoneNumber };
     const missingFields = Object.entries(requiredFields)
         .filter(([_, value]) => value === undefined || value === null || value === '')
@@ -76,7 +119,21 @@ const createProvider = async (req, res) => {
             return res.status(409).json({ message: 'Provider with this email already exists' });
         }
         const newProvider = await prisma.provider.create({
-            data: req.body
+            data: {
+                ...req.body,
+                parentProviderId: providerId,
+                providerType: client_1.ProviderType.BRANCH
+            }
+        });
+        const hashedPassword = await bcryptjs_1.default.hash("admin123456", 10);
+        await prisma.user.create({
+            data: {
+                email,
+                password: hashedPassword,
+                fullName: name,
+                role: "SUPERADMIN",
+                providerId: newProvider.id
+            }
         });
         return res.status(201).json(newProvider);
     }
@@ -119,12 +176,16 @@ const updateProvider = async (req, res) => {
 exports.updateProvider = updateProvider;
 const deleteProvider = async (req, res) => {
     const { id } = req.params;
+    const { providerId } = req.user;
     if (!(0, uuid_1.validate)(id)) {
         return res.status(400).json({ message: 'Invalid provider ID format' });
     }
     try {
         await prisma.provider.delete({
-            where: { id }
+            where: {
+                id,
+                parentProviderId: providerId
+            }
         });
         res.status(204).send();
     }
@@ -274,4 +335,79 @@ const updateAccount = async (req, res) => {
     }
 };
 exports.updateAccount = updateAccount;
+const createSmsIntegrationSettings = async (req, res) => {
+    const { sendWhenBillIsMade, sendWhenBillIsDue, sendWhenPaymentIsMade, sendWhenCustomerAdded, sendDaysBeforeDue, sendWhenBillIsMadeTemplate, sendWhenBillIsDueTemplate, sendWhenPaymentIsMadeTemplate, sendWhenCustomerAddedTemplate, sendDaysBeforeDueTemplate } = req.body;
+    const { providerId } = req.user;
+    try {
+        const existingSettings = await prisma.smsIntegrationSettings.findUnique({
+            where: {
+                providerId
+            }
+        });
+        if (existingSettings) {
+            const updatedSettings = await prisma.smsIntegrationSettings.update({
+                where: {
+                    providerId
+                },
+                data: {
+                    sendWhenBillIsMade: sendWhenBillIsMade !== undefined ? sendWhenBillIsMade : existingSettings.sendWhenBillIsMade,
+                    sendWhenBillIsDue: sendWhenBillIsDue !== undefined ? sendWhenBillIsDue : existingSettings.sendWhenBillIsDue,
+                    sendWhenPaymentIsMade: sendWhenPaymentIsMade !== undefined ? sendWhenPaymentIsMade : existingSettings.sendWhenPaymentIsMade,
+                    sendWhenCustomerAdded: sendWhenCustomerAdded !== undefined ? sendWhenCustomerAdded : existingSettings.sendWhenCustomerAdded,
+                    sendDaysBeforeDueEnabled: sendDaysBeforeDue !== undefined ? sendDaysBeforeDue.enabled : existingSettings.sendDaysBeforeDueEnabled,
+                    sendDaysBeforeDueDays: sendDaysBeforeDue !== undefined ? sendDaysBeforeDue.daysBefore : existingSettings.sendDaysBeforeDueDays,
+                    sendWhenBillIsMadeTemplate: sendWhenBillIsMadeTemplate !== undefined ? sendWhenBillIsMadeTemplate : existingSettings.sendWhenBillIsMadeTemplate,
+                    sendWhenBillIsDueTemplate: sendWhenBillIsDueTemplate !== undefined ? sendWhenBillIsDueTemplate : existingSettings.sendWhenBillIsDueTemplate,
+                    sendWhenPaymentIsMadeTemplate: sendWhenPaymentIsMadeTemplate !== undefined ? sendWhenPaymentIsMadeTemplate : existingSettings.sendWhenPaymentIsMadeTemplate,
+                    sendWhenCustomerAddedTemplate: sendWhenCustomerAddedTemplate !== undefined ? sendWhenCustomerAddedTemplate : existingSettings.sendWhenCustomerAddedTemplate,
+                    sendDaysBeforeDueTemplate: sendDaysBeforeDueTemplate !== undefined ? sendDaysBeforeDueTemplate : existingSettings.sendDaysBeforeDueTemplate
+                }
+            });
+            return res.status(200).json(updatedSettings);
+        }
+        else {
+            const settings = await prisma.smsIntegrationSettings.create({
+                data: {
+                    providerId,
+                    sendWhenBillIsMade,
+                    sendWhenBillIsDue,
+                    sendWhenPaymentIsMade,
+                    sendWhenCustomerAdded,
+                    sendDaysBeforeDueEnabled: sendDaysBeforeDue.enabled,
+                    sendDaysBeforeDueDays: sendDaysBeforeDue.daysBefore,
+                    sendWhenBillIsMadeTemplate,
+                    sendWhenBillIsDueTemplate,
+                    sendWhenPaymentIsMadeTemplate,
+                    sendWhenCustomerAddedTemplate,
+                    sendDaysBeforeDueTemplate
+                }
+            });
+            return res.status(201).json(settings);
+        }
+    }
+    catch (error) {
+        console.log(error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+exports.createSmsIntegrationSettings = createSmsIntegrationSettings;
+const getSmsIntegrationSettings = async (req, res) => {
+    const { providerId } = req.user;
+    try {
+        const settings = await prisma.smsIntegrationSettings.findUnique({
+            where: {
+                providerId
+            }
+        });
+        if (!settings) {
+            return res.status(404).json({ message: "SMS Integration Settings not found" });
+        }
+        return res.status(200).json(settings);
+    }
+    catch (error) {
+        console.log(error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+exports.getSmsIntegrationSettings = getSmsIntegrationSettings;
 //# sourceMappingURL=providerController.js.map

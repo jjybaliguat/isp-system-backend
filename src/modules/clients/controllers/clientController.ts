@@ -303,6 +303,66 @@ export const getClientsAnalytics = async(req: Request, res: Response) => {
 
 }
 
+export const getPortalData = async (req: Request, res: Response) => {
+  const { id } = req.user
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id },
+      include: {
+        client: {
+          include: {
+            accounts: {
+              include: {
+                servicePlan: true,
+                billings: true,
+              },
+            },
+          },
+        },
+      },
+    })
+
+    if (!user?.client) {
+      return res.status(404).json({ message: "Client not found" })
+    }
+
+    // Map each account
+    const accounts = user.client.accounts.map((account) => {
+      // Calculate outstanding balance
+      const outstandingBalance = account.billings.reduce((sum, bill) => {
+        const paid = bill.paidAmount ?? 0
+        return sum + (bill.amount - paid)
+      }, 0)
+
+      // Find next due date
+      const upcomingBill = account.billings
+        .filter((b) => !b.paidAt || (b.paidAmount ?? 0) < b.amount)
+        .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())[0]
+
+      return {
+        id: account.id,
+        accountNumber: account.accountNumber,
+        activePlan: account.servicePlan?.name || "N/A",
+        nextDueDate: upcomingBill
+                ? upcomingBill.dueDate.toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                })
+                : "N/A",
+        outstandingBalance,
+        serviceStatus: account.status,
+      }
+    })
+
+    res.json({ accounts })
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ message: "Internal server error" })
+  }
+}
+
 
 export const getClientsCount = async(req: Request, res: Response) => {
     const {id: userId, providerId} = req.user;
@@ -723,7 +783,7 @@ export const createAccount = async(req: Request, res: Response) => {
         coverageId,
         notes,
         proRatedDays,
-        createBill,
+        generateBill,
         odpPortId
     } = req.body;
     
@@ -816,24 +876,24 @@ export const createAccount = async(req: Request, res: Response) => {
             const updatedAccount = await tx.accounts.findUnique({
                 where: { id: account.id },
                 include: {
-                servicePlan: {
-                    select: {
-                    name: true,
-                    monthlyFee: true,
+                    servicePlan: {
+                        select: {
+                        name: true,
+                        monthlyFee: true,
+                        },
                     },
-                },
-                coverage: {
-                    select: {
-                    name: true,
+                    coverage: {
+                        select: {
+                        name: true,
+                        },
                     },
-                },
-                clientType: true,
-                client: true,
-                odpPort: {
-                    include: {
-                    odp: true,
+                    clientType: true,
+                    client: true,
+                    odpPort: {
+                        include: {
+                        odp: true,
+                        },
                     },
-                },
                 },
             });
 
@@ -883,100 +943,114 @@ export const createAccount = async(req: Request, res: Response) => {
             }
         | undefined;
 
-        if(createBill && result) {
-        // Fetch monthly payment from service plan
-        const servicePlan = await prisma.servicePlan.findUnique({ where: { id: servicePlanId } });
-        if(!servicePlan) throw new Error("Service plan not found");
-        const monthlyPayment = servicePlan.monthlyFee;
+        if(generateBill && result) {
+            // Fetch monthly payment from service plan
+            console.log("Account Created:", result.accountNumber, " - id", result.id)
+            const servicePlan = await prisma.servicePlan.findUnique({ where: { id: servicePlanId } });
+            if(!servicePlan) throw new Error("Service plan not found");
+            const monthlyPayment = servicePlan.monthlyFee;
 
-        const today = new Date();
-        const prefix = settings?.invoiceDocument?.numberPrefix || 'INV-';
+            const today = new Date();
+            const prefix = settings?.invoiceDocument?.numberPrefix || 'INV-';
 
-        switch(createBill) {
-            case "Full": {
-                for (let i = 1; i <= 12; i++) {
-                const billMonth = addMonths(today, i);
-                const start = startOfMonth(billMonth);
-                const period = `Period ${billMonth.toLocaleString("default", { month: "long" })}`;
+            switch(generateBill) {
+                case "Full": {
+                    for (let i = 1; i <= 12; i++) {
+                    const billMonth = addMonths(today, i);
+                    const start = startOfMonth(billMonth);
+                    const period = `${billMonth.toLocaleString("default", { month: "long" })} ${billMonth.getFullYear()}`;
 
-                // Generate 12-digit invoice number starting with last 2 digits of year
-                const invoiceNumber = `${prefix}${billMonth.getFullYear().toString().slice(2)}${Math.floor(Math.random() * 1e10)
-                .toString()
-                .padStart(10, "0")}`;
+                    // Generate 12-digit invoice number starting with last 2 digits of year
+                    const invoiceNumber = `${prefix}${billMonth.getFullYear().toString().slice(2)}${Math.floor(Math.random() * 1e10)
+                    .toString()
+                    .padStart(10, "0")}`;
 
+                    await prisma.billing.create({
+                        data: {
+                            clientId: result?.clientId!,
+                            accountId: result?.id!,
+                            invoiceNumber,
+                            billingDate: start,          // billing date = first day of month
+                            dueDate: addDays(start, (result?.billingDay!)),
+                            period,
+                            amount: monthlyPayment,
+                            description: `Monthly bill for ${billMonth.toLocaleString("default", { month: "long" })}-Acc-${result?.accountNumber!}`
+                        }
+                    });
+                }
+                break;
+                }
+                case "ThisMonth": {
+                const start = startOfMonth(today);
+                const period = `${start.toLocaleString("default", { month: "long" })} ${start.getFullYear()}`;
+                const invoiceNumber = `${prefix}${today.getFullYear().toString().slice(2)}${Math.floor(Math.random()*1e10).toString().padStart(10,'0')}`;
                 await prisma.billing.create({
-                data: {
+                    data: {
                     clientId: result?.clientId!,
                     accountId: result?.id!,
                     invoiceNumber,
-                    billingDate: start,          // billing date = first day of month
-                    dueDate: addDays(start, (result?.billingDay!)),
+                    billingDate: today,
+                    dueDate: addDays(start, (result?.billingDay! - 1)),
                     period,
                     amount: monthlyPayment,
-                    description: `Monthly bill for ${billMonth.toLocaleString("default", { month: "long" })}-Acc-${result?.accountNumber!}`
-                }
+                    description: `Monthly bill for ${start.toLocaleString("default", { month: "long" })}-Acc-${result?.accountNumber!}`
+                    }
                 });
-            }
-            break;
-            }
-            case "ThisMonth": {
-            const start = startOfMonth(today);
-            const period = `Period ${start.toLocaleString("default", { month: "long" })}`;
-            const invoiceNumber = `${prefix}${today.getFullYear().toString().slice(2)}${Math.floor(Math.random()*1e10).toString().padStart(10,'0')}`;
-            await prisma.billing.create({
-                data: {
-                clientId: result?.clientId!,
-                accountId: result?.id!,
-                invoiceNumber,
-                billingDate: today,
-                dueDate: addDays(start, (result?.billingDay! - 1)),
-                period,
-                amount: monthlyPayment,
-                description: `Monthly bill for ${start.toLocaleString("default", { month: "long" })}-Acc-${result?.accountNumber!}`
+                break;
                 }
-            });
-            break;
-            }
 
-            case "NextMonth": {
-            const nextMonth = addMonths(today, 1);
-            const start = startOfMonth(nextMonth);
-            const period = `Period ${nextMonth.toLocaleString("default", { month: "long" })}`;
-            const invoiceNumber = `${prefix}${today.getFullYear().toString().slice(2)}${Math.floor(Math.random()*1e10).toString().padStart(10,'0')}`;
-            await prisma.billing.create({
-                data: {
-                clientId: result?.clientId,
-                accountId: result?.id,
-                invoiceNumber,
-                billingDate: start,
-                dueDate: addDays(start, (result?.billingDay!)),
-                period,
-                amount: monthlyPayment,
-                description: `Monthly bill for ${nextMonth.toLocaleString("default", { month: "long" })}-Acc-${result?.accountNumber}`
-                }
-            });
-            break;
-            }
+                case "NextMonth": {
+                    const nextMonth = addMonths(today, 1)
+                    const start = startOfMonth(nextMonth)
 
-            case "ProRated": {
-            const amount = (monthlyPayment / 30) * Number(proRatedDays);
-            const period = `Prorated`;;
-            const invoiceNumber = `${prefix}${today.getFullYear().toString().slice(2)}${Math.floor(Math.random()*1e10).toString().padStart(10,'0')}`;
-            await prisma.billing.create({
-                data: {
-                clientId: result?.clientId,
-                accountId: result?.id,
-                invoiceNumber,
-                billingDate: today,
-                dueDate: addDays(today, (result?.billingDay! - 1)),
-                period,
-                amount,
-                description: `ProRated bill for ${proRatedDays} days Acc-${result?.accountNumber}`
+                    const billingDay = result.billingDay ?? 1
+
+                    const dueDate = addDays(start, billingDay - 1)
+
+                    const period = `${nextMonth.toLocaleString("default", { month: "long" })} ${nextMonth.getFullYear()}`
+                    const invoiceNumber = `${prefix}${today
+                        .getFullYear()
+                        .toString()
+                        .slice(2)}${Math.floor(Math.random() * 1e10)
+                        .toString()
+                        .padStart(10, "0")}`
+
+                    await prisma.billing.create({
+                        data: {
+                        clientId: result.clientId,
+                        accountId: result.id,
+                        invoiceNumber,
+                        billingDate: today,
+                        dueDate,
+                        period,
+                        amount: monthlyPayment,
+                        description: `Monthly bill for ${nextMonth.toLocaleString("default", {
+                            month: "long",
+                        })}-Acc-${result.accountNumber}`,
+                        },
+                    })
+
+                    break
+                    }
+                case "ProRated": {
+                const amount = (monthlyPayment / 30) * Number(proRatedDays);
+                const period = `Prorated`;;
+                const invoiceNumber = `${prefix}${today.getFullYear().toString().slice(2)}${Math.floor(Math.random()*1e10).toString().padStart(10,'0')}`;
+                await prisma.billing.create({
+                    data: {
+                    clientId: result?.clientId,
+                    accountId: result?.id,
+                    invoiceNumber,
+                    billingDate: today,
+                    dueDate: addDays(today, (result?.billingDay! - 1)),
+                    period,
+                    amount,
+                    description: `ProRated bill for ${proRatedDays} days Acc-${result?.accountNumber}`
+                    }
+                });
+                break;
                 }
-            });
-            break;
             }
-        }
         }
 
         const user = await prisma.user.findUnique({
@@ -996,7 +1070,7 @@ export const createAccount = async(req: Request, res: Response) => {
             entity: 'Client',
             userId: userId,
             providerId: providerId,
-            message: `New Account for client ${result?.client.fullName} created by user ${user?.employee?.fullName || user?.provider.name || 'Unknown'} ${createBill? `with created bill ${createBill}` : ""}`
+            message: `New Account for client ${result?.client.fullName} created by user ${user?.employee?.fullName || user?.provider.name || 'Unknown'} ${generateBill? `with created bill ${generateBill}` : ""}`
         });
 
         res.status(201).json(result);
@@ -1440,3 +1514,109 @@ export const generateSoaReport = async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Failed to generate Statement of Account", error });
   }
 };
+
+
+export const getClientBillings = async (req: Request, res: Response) => {
+  const { id: userId, providerId } = req.user
+
+  try {
+    /* ================= CLIENT ================= */
+    const client = await prisma.client.findFirst({
+      where: {
+        users: {
+            id: userId
+        },
+        providerId,
+      },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+      },
+    })
+
+    if (!client) {
+      return res.status(404).json({ message: "Client not found" })
+    }
+
+    /* ================= BILLINGS ================= */
+    const billings = await prisma.billing.findMany({
+      where: {
+        clientId: client.id,
+      },
+      include: {
+        account: {
+          select: {
+            id: true,
+            accountNumber: true,
+          },
+        },
+        billingCharges: true,
+        discounts: true,
+      },
+      orderBy: {
+        billingDate: "desc",
+      },
+    })
+
+    /* ================= PAYMENTS (SEPARATE) ================= */
+    const payments = await prisma.payment.findMany({
+      where: {
+        clientId: client.id,
+      },
+      include: {
+        billing: {
+          select: {
+            id: true,
+            invoiceNumber: true,
+          },
+        },
+        account: {
+          select: {
+            id: true,
+            accountNumber: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    })
+
+    return res.status(200).json({
+      client,
+      billings: billings.map(b => ({
+        id: b.id,
+        invoiceNumber: b.invoiceNumber,
+        billingDate: b.billingDate,
+        dueDate: b.dueDate,
+        period: b.period,
+        amount: b.amount,
+        paidAmount: b.paidAmount ?? 0,
+        status: b.status,
+        billingType: b.billingType,
+        remarks: b.remarks,
+        account: b.account,
+        billingCharges: b.billingCharges,
+        discounts: b.discounts,
+        outstandingBalance: b.amount - (b.paidAmount ?? 0),
+      })),
+      payments: payments.map(p => ({
+        id: p.id,
+        amount: p.amount,
+        status: p.status,
+        paymentMethod: p.paymentMethod,
+        paymentChannel: p.paymentChannel,
+        referenceId: p.referenceId,
+        paidAt: p.paidAt,
+        paymentDate: p.paymentDate,
+        createdAt: p.createdAt,
+        invoiceNumber: p.billing?.invoiceNumber,
+        accountNumber: p.account?.accountNumber
+      })),
+    })
+  } catch (error) {
+    console.error(error)
+    return res.status(500).json({ message: "Internal server error" })
+  }
+}

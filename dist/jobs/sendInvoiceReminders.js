@@ -32,9 +32,15 @@ async function sendInvoiceReminders(providerId) {
             const endUtc = (0, date_fns_tz_1.toZonedTime)((0, date_fns_1.endOfDay)(targetLocalDate), "Asia/Manila");
             const invoices = await prisma.billing.findMany({
                 where: {
-                    client: {
-                        providerId,
-                        status: "ACTIVE"
+                    // client: {
+                    // providerId,
+                    // status: "ACTIVE"
+                    // },
+                    account: {
+                        client: {
+                            providerId,
+                            status: "ACTIVE"
+                        }
                     },
                     OR: [
                         { status: "PENDING" },
@@ -62,7 +68,7 @@ async function sendInvoiceReminders(providerId) {
                         emailHost: settings.notifications.emailHost,
                         emailUser: settings.notifications.emailUser,
                         emailPass: settings.notifications.emailPass,
-                        emailPort: 587,
+                        emailPort: settings.notifications.emailPort,
                         senderName: settings.notifications.senderName
                     }, invoice.client.email, "Billing Reminder", {
                         clientName: invoice.client.fullName,

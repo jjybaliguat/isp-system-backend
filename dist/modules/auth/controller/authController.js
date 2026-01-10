@@ -14,7 +14,14 @@ const loginController = async (req, res) => {
     const { email, password } = req.body;
     try {
         const user = await prisma.user.findUnique({
-            where: { email }
+            where: { email },
+            include: {
+                provider: {
+                    select: {
+                        providerType: true
+                    }
+                }
+            }
         });
         if (!user)
             return res.status(400).json({ message: "Invalid Credentials" });
@@ -26,15 +33,28 @@ const loginController = async (req, res) => {
             providerId: user.providerId,
             role: user.role
         }, 15); // 15min
-        const refreshToken = jsonwebtoken_1.default.sign({ "email": user.email }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: '1hr' });
+        const refreshToken = jsonwebtoken_1.default.sign({ "email": user.email, "role": user.role }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: '1hr' });
         // Create secure cookie with refresh token 
         res.cookie(process.env.JWT_COOKIE_NAME, refreshToken, {
-            httpOnly: true, //accessible only by web server 
-            secure: process.env.NODE_ENV === "production", //https
-            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", //cross-site cookie 
-            maxAge: 7 * 24 * 60 * 60 * 1000 //cookie expiry: 7days
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+            domain: process.env.NODE_ENV === "production" ? ".sierracommunication.net" : undefined,
+            maxAge: 7 * 24 * 60 * 60 * 1000
         });
-        return res.status(200).json({ ...user, accessToken });
+        // ---- LOG ACTION (non-blocking) ----
+        prisma.log
+            .create({
+            data: {
+                action: "LOGIN",
+                entity: "User",
+                userId: user.id,
+                message: `User ${user.email} has logged in.`,
+                providerId: user.providerId,
+            },
+        })
+            .catch(console.error);
+        return res.status(200).json({ ...user, accessToken, providerType: user.provider.providerType });
     }
     catch (error) {
         console.log(error);
@@ -97,8 +117,15 @@ exports.refresh = (0, express_async_handler_1.default)(async (req, res) => {
         return res.status(401).json({ message: 'Unauthorized' });
     const refreshToken = cookies.jwt_refresh_secret;
     jsonwebtoken_1.default.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, async (err, decoded) => {
-        if (err)
+        if (err) {
+            res.clearCookie(process.env.JWT_COOKIE_NAME, {
+                httpOnly: true,
+                sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+                domain: process.env.NODE_ENV === "production" ? ".sierracommunication.net" : undefined,
+                secure: process.env.NODE_ENV === "production",
+            });
             return res.status(403).json({ message: "Forbidden" });
+        }
         const foundUser = await prisma.user.findUnique({
             where: { email: decoded.email },
         });
@@ -115,13 +142,32 @@ exports.refresh = (0, express_async_handler_1.default)(async (req, res) => {
 });
 const logout = async (req, res) => {
     const cookies = req.cookies;
+    const { id } = req.user;
+    const user = await prisma.user.findUnique({
+        where: { id },
+    });
+    if (!user)
+        return res.sendStatus(204); //No content
     if (!cookies?.jwt_refresh_secret)
         return res.sendStatus(204); //No content
     res.clearCookie(process.env.JWT_COOKIE_NAME, {
         httpOnly: true,
         sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+        domain: process.env.NODE_ENV === "production" ? ".sierracommunication.net" : undefined,
         secure: process.env.NODE_ENV === "production",
     });
+    // ---- LOG ACTION (non-blocking) ----
+    prisma.log
+        .create({
+        data: {
+            action: "LOGOUT",
+            entity: "User",
+            userId: user.id,
+            message: `User ${user.email} has logged out.`,
+            providerId: user.providerId,
+        },
+    })
+        .catch(console.error);
     console.log("cookie cleared");
     res.json({ message: 'Cookie cleared' });
 };

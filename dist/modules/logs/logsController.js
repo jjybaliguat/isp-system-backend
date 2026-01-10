@@ -9,6 +9,7 @@ const getLogs = async (req, res) => {
     const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
     const month = typeof req.query.month === "string" ? req.query.month : undefined;
     const year = typeof req.query.year === "string" ? req.query.year : undefined;
+    const entity = typeof req.query.entity === "string" ? req.query.entity : undefined;
     const providerId = req.user.providerId;
     const skip = (page - 1) * limit;
     if (!providerId)
@@ -28,9 +29,6 @@ const getLogs = async (req, res) => {
         if (search) {
             whereClause.OR = [
                 {
-                    entity: { contains: search, mode: 'insensitive' }
-                },
-                {
                     message: { contains: search, mode: 'insensitive' }
                 },
                 {
@@ -39,6 +37,9 @@ const getLogs = async (req, res) => {
                     }
                 }
             ];
+        }
+        if (entity) {
+            whereClause.entity = entity;
         }
         const [data, total] = await Promise.all([
             prisma.log.findMany({
