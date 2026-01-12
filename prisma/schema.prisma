@@ -146,7 +146,7 @@ model Billing {
   amount       Float
   discounts    Discount[]
   paidAt       DateTime?
-  paidAmount   Float?    @default(0)
+  paidAmount   Float    @default(0)
   status       BillingStatus  @default(PENDING)
   description  String?
   billingType BillingType? @default(REGULAR)
@@ -218,7 +218,7 @@ model Payment {
   status         PaymentStatus @default(PENDING)
   paymentMethod  String?
   paymentChannel String?
-  referenceId    String?    
+  referenceId    String?    @unique
   xenditInvoiceId String?   @unique
   xenditPaymentUrl String?
   paidAt         DateTime?
@@ -251,6 +251,7 @@ model Provider {
   subscriptionStatus SubscriptionStatus @default(ACTIVE)
   xenditApiKey  String? @unique
   semaphoreApiKey String? @unique
+  paymentConvenienceFee Int @default(15)
 
   // Relations
   clientTypes    ClientType[]

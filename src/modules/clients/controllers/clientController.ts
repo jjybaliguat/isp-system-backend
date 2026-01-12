@@ -546,7 +546,6 @@ export const createClient = async(req: Request, res: Response) => {
         );
 
         if (provider?.smsIntegrationSettings?.sendWhenCustomerAdded) {
-            console.log("Sending SMS notification for new client added...");
 
             try {
                 const decryptedKey = decrypt(provider.semaphoreApiKey!);
@@ -1436,12 +1435,10 @@ export const generateSoaReport = async (req: Request, res: Response) => {
                 },
               },
               include: {
-                discounts: true,
-                payments: true,
+                discounts: true
               },
               orderBy: { billingDate: "asc" },
-            },
-            payments: true,
+            }
           },
         },
         servicePlan: true,
@@ -1457,7 +1454,6 @@ export const generateSoaReport = async (req: Request, res: Response) => {
     const statement = client.accounts.map((account) => {
       const billingHistory = account.billings.map((billing) => {
         const totalDiscount = billing.discounts.reduce((sum, d) => sum + d.amount, 0);
-        const totalPaid = billing.payments.reduce((sum, p) => sum + Number(p.amount), 0);
 
         return {
           invoiceNumber: billing.invoiceNumber,
@@ -1466,7 +1462,7 @@ export const generateSoaReport = async (req: Request, res: Response) => {
           period: billing.period,
           amount: billing.amount,
           discount: totalDiscount,
-          paidAmount: totalPaid,
+          paidAmount: billing.paidAmount,
           status: billing.status,
         };
       });
@@ -1539,6 +1535,8 @@ export const getClientBillings = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Client not found" })
     }
 
+    console.log("a;lsjcvoiasc")
+
     /* ================= BILLINGS ================= */
     const billings = await prisma.billing.findMany({
       where: {
@@ -1546,10 +1544,9 @@ export const getClientBillings = async (req: Request, res: Response) => {
       },
       include: {
         account: {
-          select: {
-            id: true,
-            accountNumber: true,
-          },
+          include: {
+            client: true
+          }
         },
         billingCharges: true,
         discounts: true,
@@ -1619,4 +1616,41 @@ export const getClientBillings = async (req: Request, res: Response) => {
     console.error(error)
     return res.status(500).json({ message: "Internal server error" })
   }
+}
+
+export const getUserTickets = async (req: Request, res: Response) => {
+    const {id} = req.user as {id: string}
+
+    try {
+        const user = await prisma.user.findUnique({
+            where: {
+                id
+            },
+            include: {
+                tickets: {
+                    include: {
+                        assignedToEmployee: true,
+                        assignedToTeam: true,
+                        createdBy: {
+                            select: {
+                                id: true,
+                                fullName: true
+                            }
+                        }
+                    },
+                    orderBy: {
+                        updatedAt: "desc"
+                    }
+                }
+            }
+        }
+    )
+
+        if(!user) return res.status(400).json({message: "User not found"})
+
+        return res.status(200).json(user.tickets)
+    } catch (error) {
+        console.log(error)
+        return res.status(500).json({message: "Internal Server Error"})
+    }
 }

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getClientBillings = exports.generateSoaReport = exports.getClientsPhoneNumbers = exports.deleteClient = exports.updateClient = exports.deleteClientAccount = exports.updateClientAccount = exports.createAccount = exports.createClient = exports.getClientById = exports.getClientsCount = exports.getPortalData = exports.getClientsAnalytics = exports.getAccounts = exports.getClients = void 0;
+exports.getUserTickets = exports.getClientBillings = exports.generateSoaReport = exports.getClientsPhoneNumbers = exports.deleteClient = exports.updateClient = exports.deleteClientAccount = exports.updateClientAccount = exports.createAccount = exports.createClient = exports.getClientById = exports.getClientsCount = exports.getPortalData = exports.getClientsAnalytics = exports.getAccounts = exports.getClients = void 0;
 const client_1 = require("@prisma/client");
 const logger_1 = require("../../../utils/logger");
 const date_fns_1 = require("date-fns");
@@ -1205,12 +1205,10 @@ const generateSoaReport = async (req, res) => {
                                 },
                             },
                             include: {
-                                discounts: true,
-                                payments: true,
+                                discounts: true
                             },
                             orderBy: { billingDate: "asc" },
-                        },
-                        payments: true,
+                        }
                     },
                 },
                 servicePlan: true,
@@ -1224,7 +1222,6 @@ const generateSoaReport = async (req, res) => {
         const statement = client.accounts.map((account) => {
             const billingHistory = account.billings.map((billing) => {
                 const totalDiscount = billing.discounts.reduce((sum, d) => sum + d.amount, 0);
-                const totalPaid = billing.payments.reduce((sum, p) => sum + Number(p.amount), 0);
                 return {
                     invoiceNumber: billing.invoiceNumber,
                     billingDate: billing.billingDate,
@@ -1232,7 +1229,7 @@ const generateSoaReport = async (req, res) => {
                     period: billing.period,
                     amount: billing.amount,
                     discount: totalDiscount,
-                    paidAmount: totalPaid,
+                    paidAmount: billing.paidAmount,
                     status: billing.status,
                 };
             });
@@ -1298,6 +1295,7 @@ const getClientBillings = async (req, res) => {
         if (!client) {
             return res.status(404).json({ message: "Client not found" });
         }
+        console.log("a;lsjcvoiasc");
         /* ================= BILLINGS ================= */
         const billings = await prisma.billing.findMany({
             where: {
@@ -1305,10 +1303,9 @@ const getClientBillings = async (req, res) => {
             },
             include: {
                 account: {
-                    select: {
-                        id: true,
-                        accountNumber: true,
-                    },
+                    include: {
+                        client: true
+                    }
                 },
                 billingCharges: true,
                 discounts: true,
@@ -1379,4 +1376,39 @@ const getClientBillings = async (req, res) => {
     }
 };
 exports.getClientBillings = getClientBillings;
+const getUserTickets = async (req, res) => {
+    const { id } = req.user;
+    try {
+        const user = await prisma.user.findUnique({
+            where: {
+                id
+            },
+            include: {
+                tickets: {
+                    include: {
+                        assignedToEmployee: true,
+                        assignedToTeam: true,
+                        createdBy: {
+                            select: {
+                                id: true,
+                                fullName: true
+                            }
+                        }
+                    },
+                    orderBy: {
+                        updatedAt: "desc"
+                    }
+                }
+            }
+        });
+        if (!user)
+            return res.status(400).json({ message: "User not found" });
+        return res.status(200).json(user.tickets);
+    }
+    catch (error) {
+        console.log(error);
+        return res.status(500).json({ message: "Internal Server Error" });
+    }
+};
+exports.getUserTickets = getUserTickets;
 //# sourceMappingURL=clientController.js.map

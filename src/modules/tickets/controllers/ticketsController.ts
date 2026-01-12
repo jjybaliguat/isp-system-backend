@@ -71,9 +71,15 @@ export const getTickets = async (req: Request, res: Response) => {
                             id: true,
                             fullName: true
                         }
+                    },
+                    createdBy: {
+                        select: {
+                            id: true,
+                            fullName: true
+                        }
                     }
                 },
-                orderBy: { createdAt: "desc" },
+                orderBy: { createdAt: "asc" },
                 skip,
                 take: limit,
             }),
@@ -107,6 +113,42 @@ export const createTicket = async(req: Request, res: Response) => {
     };
 
     try {
+
+        const user = await prisma.user.findUnique({
+            where: {
+                id: userId
+            },
+            include: {
+                client: true
+            }
+        })
+
+        if(!user) return res.status(404).json("User not found")
+
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date();
+        endOfDay.setHours(23, 59, 59, 999);
+
+        const existingCount = await prisma.ticket.count({
+            where: {
+                clientId: user.client?.id!,
+                providerId,
+                category: body.category,
+                status: {
+                    in: ["PENDING", "ONGOING", "OVERDUE"]
+                },
+                createdAt: {
+                    gte: startOfDay,
+                    lte: endOfDay,
+                },
+            }
+        })
+
+        if (existingCount >= 1) {
+            return res.status(429).json({ message: "You can create 1 ticket per category per day" });
+        }
+
         let parsedDueDate: Date | null = null;
         if (dueDate) {
             const dateValue = new Date(dueDate);
@@ -122,6 +164,7 @@ export const createTicket = async(req: Request, res: Response) => {
                 ...body,
                 dueDate: parsedDueDate,
                 providerId,
+                ...(user.client? {clientId: user.client.id} : undefined),
                 createdById: userId
             }
         })
@@ -152,7 +195,6 @@ export const updateTicket = async (req: Request, res: Response) => {
     const { id: userId, providerId } = req.user;
 
     const {assignedToTeamId, assignedToEmployeeId} = body
-    console.log("Request Body:", body);
 
     try {
     // Get the existing ticket first
@@ -176,8 +218,6 @@ export const updateTicket = async (req: Request, res: Response) => {
         : assignedToEmployeeId || ticket.assignedToEmployeeId,
     };
 
-    // Update the ticket
-    console.log("Updated Assignment:", updatedAssignment);
     const updatedTicket = await prisma.ticket.update({
     where: { id, providerId },
     data: {

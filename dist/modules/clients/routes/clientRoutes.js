@@ -9,6 +9,7 @@ router.get("/accounts", authMiddleware_1.authenticateProvider, clientController_
 router.get("/analytics", authMiddleware_1.authenticateProvider, clientController_1.getClientsAnalytics);
 router.get("/portal", authMiddleware_1.authenticateProvider, clientController_1.getPortalData);
 router.get("/billings", authMiddleware_1.authenticateProvider, clientController_1.getClientBillings);
+router.get("/tickets", authMiddleware_1.authenticateProvider, clientController_1.getUserTickets);
 router.get("/count", authMiddleware_1.authenticateProvider, clientController_1.getClientsCount);
 router.get("/:id", authMiddleware_1.authenticateProvider, clientController_1.getClientById);
 router.get("/phoneNumbers/get", authMiddleware_1.authenticateProvider, clientController_1.getClientsPhoneNumbers);

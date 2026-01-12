@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createAccount, createClient, deleteClient, deleteClientAccount, generateSoaReport, getAccounts, getClientBillings, getClientById, getClients, getClientsAnalytics, getClientsCount, getClientsPhoneNumbers, getPortalData, updateClient, updateClientAccount } from "../controllers/clientController";
+import { createAccount, createClient, deleteClient, deleteClientAccount, generateSoaReport, getAccounts, getClientBillings, getClientById, getClients, getClientsAnalytics, getClientsCount, getClientsPhoneNumbers, getPortalData, getUserTickets, updateClient, updateClientAccount } from "../controllers/clientController";
 import { authenticateProvider } from "../../../middlewares/authMiddleware";
 
 const router = Router();
@@ -9,6 +9,7 @@ router.get("/accounts", authenticateProvider, getAccounts)
 router.get("/analytics", authenticateProvider, getClientsAnalytics)
 router.get("/portal", authenticateProvider, getPortalData)
 router.get("/billings", authenticateProvider, getClientBillings)
+router.get("/tickets", authenticateProvider, getUserTickets)
 router.get("/count", authenticateProvider, getClientsCount)
 router.get("/:id", authenticateProvider, getClientById)
 router.get("/phoneNumbers/get", authenticateProvider, getClientsPhoneNumbers)
