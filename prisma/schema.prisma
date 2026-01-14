@@ -252,6 +252,7 @@ model Provider {
   xenditApiKey  String? @unique
   semaphoreApiKey String? @unique
   paymentConvenienceFee Int @default(15)
+  invoiceDurationDays Int @default(1)
 
   // Relations
   clientTypes    ClientType[]

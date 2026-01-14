@@ -9,6 +9,7 @@ interface VariableProps {
   link?: string;
   websiteLink?: string;
   period?: string;
+  password?: string
   billingDay?: string;
 }
 

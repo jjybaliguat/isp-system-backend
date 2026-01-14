@@ -5,6 +5,8 @@ import { addMonths, startOfMonth, endOfMonth, setDate, addDays, format } from "d
 import { validate as isUuid } from "uuid";
 import { decrypt } from "../../../utils/hasher";
 import { sendSms } from "../../../jobs/sendSms";
+import bcrypt from "bcryptjs";
+
 
 const prisma = new PrismaClient();
 
@@ -495,8 +497,9 @@ export const createClient = async(req: Request, res: Response) => {
         });
 
 
-        const client = await prisma.client.create({
-            data: {
+        const result = await prisma.$transaction(async (tx) => {
+            const client = await tx.client.create({
+                data: {
                 code,
                 fullName,
                 email,
@@ -510,16 +513,16 @@ export const createClient = async(req: Request, res: Response) => {
                 clientTypeId,
                 coverageId,
                 billingDay: Number(billingDay),
-                notes
-            },
-            include: {
+                notes,
+                },
+                include: {
                 clientType: true,
-                servicePlan: true
-            }
-        })
-        
-        const account = await prisma.accounts.create({
-            data: {
+                servicePlan: true,
+                },
+            });
+
+            const account = await tx.accounts.create({
+                data: {
                 clientId: client.id,
                 servicePlanId,
                 clientTypeId,
@@ -530,15 +533,32 @@ export const createClient = async(req: Request, res: Response) => {
                 mikrotikAccount,
                 installationDate: installDate,
                 address,
-            }
-        })
+                },
+            });
+
+            const hashedPassword = await bcrypt.hash("admin123456", 10);
+
+            const user = await tx.user.create({
+                data: {
+                email: client.email,
+                password: hashedPassword,
+                fullName: client.fullName,
+                clientId: client.id,
+                providerId,
+                role: "CLIENT",
+                },
+            });
+
+            return { client, account, user };
+            });
+
 
         const nextMonth = addMonths(new Date(), 1);
         const dueDate = format(
         setDate(
             nextMonth,
             Math.min(
-            account.billingDay!,
+            result.account.billingDay!,
             endOfMonth(nextMonth).getDate()
             )
         ),
@@ -554,17 +574,18 @@ export const createClient = async(req: Request, res: Response) => {
                 provider.smsIntegrationSettings?.sendWhenCustomerAddedTemplate || "";
 
                 await sendSms(
-                client.phoneNumber!,
+                result.client.phoneNumber!,
                 messageTemplate,
                 {
-                    name: client.fullName,
-                    accNum: account.accountNumber,
-                    billingDay: account.billingDay?.toString() || "",
+                    name: result.client.fullName,
+                    accNum: result.account.accountNumber,
+                    billingDay: result.account.billingDay?.toString() || "",
                     companyName: provider.companyName || "",
-                    email: client.email || "",
-                    phone: client.phoneNumber || "",
-                    amount: client.servicePlan?.monthlyFee.toString() || "",
+                    email: result.client.email || "",
+                    phone: result.client.phoneNumber || "",
+                    amount: result.client.servicePlan?.monthlyFee.toString() || "",
                     link: "https://sierracommunication.net",
+                    password: "admin123456",
                     websiteLink: process.env.WEBSITE_LINK!,
                     dueDate
                 },
@@ -584,8 +605,8 @@ export const createClient = async(req: Request, res: Response) => {
                     id: odpPortId
                 },
                 data: {
-                    clientId: client.id,
-                    accountId: account.id,
+                    clientId: result.client.id,
+                    accountId: result.account.id,
                     status: "OCCUPIED"
                 }
             })
@@ -628,14 +649,14 @@ export const createClient = async(req: Request, res: Response) => {
 
                 await prisma.billing.create({
                 data: {
-                    clientId: client.id,
-                    accountId: account.id,
+                    clientId: result.client.id,
+                    accountId: result.account.id,
                     invoiceNumber,
                     billingDate: start,          // billing date = first day of month
-                    dueDate: addDays(start, (client.billingDay!)),
+                    dueDate: addDays(start, (result.client.billingDay!)),
                     period,
                     amount: monthlyPayment,
-                    description: `Monthly bill for ${billMonth.toLocaleString("default", { month: "long" })}-Acc-${client.accountNumber}`,
+                    description: `Monthly bill for ${billMonth.toLocaleString("default", { month: "long" })}-Acc-${result.client.accountNumber}`,
                     billingType: BillingType.REGULAR,
                     billingCharges: {
                         create: [
@@ -656,14 +677,14 @@ export const createClient = async(req: Request, res: Response) => {
             const invoiceNumber = `${prefix}${today.getFullYear().toString().slice(2)}${Math.floor(Math.random()*1e10).toString().padStart(10,'0')}`;
             await prisma.billing.create({
                 data: {
-                clientId: client.id,
-                accountId: account.id,
+                clientId: result.client.id,
+                accountId: result.account.id,
                 invoiceNumber,
                 billingDate: today,
-                dueDate: addDays(start, (client.billingDay! - 1)),
+                dueDate: addDays(start, (result.client.billingDay! - 1)),
                 period,
                 amount: monthlyPayment,
-                description: `Monthly bill for ${start.toLocaleString("default", { month: "long" })}-Acc-${client.accountNumber}`,
+                description: `Monthly bill for ${start.toLocaleString("default", { month: "long" })}-Acc-${result.client.accountNumber}`,
                 billingType: BillingType.REGULAR,
                 billingCharges: {
                     create: [
@@ -685,14 +706,14 @@ export const createClient = async(req: Request, res: Response) => {
             const invoiceNumber = `${prefix}${today.getFullYear().toString().slice(2)}${Math.floor(Math.random()*1e10).toString().padStart(10,'0')}`;
             await prisma.billing.create({
                 data: {
-                clientId: client.id,
-                accountId: account.id,
+                clientId: result.client.id,
+                accountId: result.account.id,
                 invoiceNumber,
                 billingDate: start,
-                dueDate: addDays(start, (client.billingDay!)),
+                dueDate: addDays(start, (result.client.billingDay!)),
                 period,
                 amount: monthlyPayment,
-                description: `Monthly bill for ${nextMonth.toLocaleString("default", { month: "long" })}-Acc-${client.accountNumber}`,
+                description: `Monthly bill for ${nextMonth.toLocaleString("default", { month: "long" })}-Acc-${result.client.accountNumber}`,
                 billingType: BillingType.REGULAR,
                 billingCharges: {
                     create: [
@@ -715,18 +736,18 @@ export const createClient = async(req: Request, res: Response) => {
             const dueDate = new Date(
                 today.getFullYear(),
                 today.getMonth() + 1,
-                Number(client.billingDay)
+                Number(result.client.billingDay)
             )
             await prisma.billing.create({
                 data: {
-                clientId: client.id,
-                accountId: account.id,
+                clientId: result.client.id,
+                accountId: result.account.id,
                 invoiceNumber,
                 billingDate: today,
                 dueDate: dueDate,
                 period,
                 amount,
-                description: `ProRated bill for ${proRatedDays} days Acc-${client.accountNumber}`,
+                description: `ProRated bill for ${proRatedDays} days Acc-${result.client.accountNumber}`,
                 billingType: BillingType.PRORATED,
                 billingCharges: {
                     create: [
@@ -763,7 +784,7 @@ export const createClient = async(req: Request, res: Response) => {
             message: `Client "${fullName}" created by user ${user?.employee?.fullName || user?.provider.name || 'Unknown'} ${createBill? `with created bill ${createBill}` : ""}`
         });
 
-        res.status(201).json(client);
+        res.status(201).json(result.client);
     } catch (error) {
         console.log(error);
         res.status(500).json({ error: 'Internal Server Error' });
@@ -1535,8 +1556,6 @@ export const getClientBillings = async (req: Request, res: Response) => {
     if (!client) {
       return res.status(404).json({ message: "Client not found" })
     }
-
-    console.log("a;lsjcvoiasc")
 
     /* ================= BILLINGS ================= */
     const billings = await prisma.billing.findMany({

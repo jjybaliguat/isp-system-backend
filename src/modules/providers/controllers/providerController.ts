@@ -220,29 +220,63 @@ export const deleteProvider = async (req: Request, res: Response) => {
     }
 }
 
-export const updateXenditKey = async(req: Request, res: Response) => {
-    const {key} = req.body
-    const {providerId, role} = req.user
+export const updateXenditKey = async (req: Request, res: Response) => {
+  const { apiKey, convenienceFee, expiration } = req.body;
+  const { providerId, role } = req.user;
 
-    if(role !== UserRole.SUPERADMIN) return res.status(401).json({message: "You are not allowed to perform this operation"})
+  if (role !== UserRole.SUPERADMIN) {
+    return res.status(403).json({
+      message: "You are not allowed to perform this operation",
+    });
+  }
 
-    try {
-        const encryptedKey = encrypt(key)
-        const newKey = await prisma.provider.update({
-            where: {
-                id: providerId
-            },
-            data: {
-                xenditApiKey: encryptedKey
-            }
-        })
-        
-        return res.status(200).json(newKey.xenditApiKey)
-    } catch (error) {
-        console.log(error)
-        res.status(500).json({ message: 'Internal server error' })
+  try {
+    const data: any = {};
+
+    if (apiKey && apiKey.trim() !== "") {
+      data.xenditApiKey = encrypt(apiKey);
     }
-}
+
+    if (expiration !== undefined) {
+      const days = Number(expiration);
+      if (!Number.isFinite(days) || days <= 0) {
+        return res.status(400).json({
+          message: "Invoice expiration must be a positive number",
+        });
+      }
+      data.invoiceDurationDays = days;
+    }
+
+    if (convenienceFee !== undefined) {
+      const fee = Number(convenienceFee);
+      if (!Number.isFinite(fee) || fee < 0) {
+        return res.status(400).json({
+          message: "Convenience fee must be 0 or greater",
+        });
+      }
+      data.paymentConvenienceFee = fee;
+    }
+
+    if (Object.keys(data).length === 0) {
+      return res.status(400).json({
+        message: "No valid fields provided for update",
+      });
+    }
+
+    await prisma.provider.update({
+      where: { id: providerId },
+      data,
+    });
+
+    return res.status(200).json({
+      message: "Xendit settings updated successfully",
+    });
+  } catch (error) {
+    console.error("updateXenditKey error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 
 export const updateSemaphoreKey = async(req: Request, res: Response) => {
     const {key} = req.body
@@ -272,17 +306,25 @@ export const getStoredKey = async(req: Request, res: Response) => {
     const {providerId} = req.user
 
     try {
-        const keys = await prisma.provider.findUnique({
+        const provider = await prisma.provider.findUnique({
             where: {
                 id: providerId
             },
             select: {
                 xenditApiKey: true,
-                semaphoreApiKey: true
+                semaphoreApiKey: true,
+                paymentConvenienceFee: true,
+                invoiceDurationDays: true
             }
         })
 
-        return res.status(200).json({xenditApiKey: keys?.xenditApiKey, semaphoreApiKey: keys?.semaphoreApiKey})
+        return res.status(200).json({
+            xendit: {
+                apiKey: provider?.xenditApiKey,
+                convenienceFee: provider?.paymentConvenienceFee,
+                expiration: provider?.invoiceDurationDays
+            }, 
+            semaphoreApiKey: provider?.semaphoreApiKey})
     } catch (error) {
         console.log(error)
         res.status(500).json({ message: 'Internal server error' })

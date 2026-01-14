@@ -181,12 +181,15 @@ export const createPayment = async (req: Request, res: Response) => {
     }
 
     // Create Xendit Invoice
+    const invoiceDuration =
+      (provider.invoiceDurationDays ?? 1) * 24 * 60 * 60;
     const invoice = await Invoice.createInvoice({
         data: {
           externalId: `${billing.invoiceNumber}-${Date.now()}`,
           payerEmail: billing.client.email,
           description: billing.description || `Payment for billing #${billing.client.accountNumber}`,
           amount: outstandingAmount + provider.paymentConvenienceFee,
+          invoiceDuration,
           shouldSendEmail: true,
           successRedirectUrl: `https://sierracommunication.net/client-portal/payment/success?id=${billing.id}`,
           failureRedirectUrl: "https://sierracommunication.net/client-portal/payment/failure",

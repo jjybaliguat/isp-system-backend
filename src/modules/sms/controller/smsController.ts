@@ -19,8 +19,6 @@ export const getSms = async(req: Request, res: Response) => {
 
         const data = await response.json();
 
-        console.log(data[0])
-
         if (!Array.isArray(data)) {
         return res.status(400).json({ message: "Invalid API Key" });
         }
