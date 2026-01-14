@@ -161,7 +161,7 @@ export const createPayment = async (req: Request, res: Response) => {
     });
 
     // ✅ Reuse ONLY if amount still matches outstanding balance
-    if (existingPayment && Number(existingPayment.amount) === outstandingAmount) {
+    if (existingPayment && Number(existingPayment.amount) === (outstandingAmount + provider.paymentConvenienceFee)) {
       return res.status(200).json({
         message: "Payment already exists",
         payment: existingPayment,
@@ -188,8 +188,8 @@ export const createPayment = async (req: Request, res: Response) => {
           description: billing.description || `Payment for billing #${billing.client.accountNumber}`,
           amount: outstandingAmount + provider.paymentConvenienceFee,
           shouldSendEmail: true,
-          successRedirectUrl: `https://sierracommunication.net/payment-success/${billing.id}`,
-          failureRedirectUrl: "https://sierracommunication.net/payment-failure",
+          successRedirectUrl: `https://sierracommunication.net/client-portal/payment/success?id=${billing.id}`,
+          failureRedirectUrl: "https://sierracommunication.net/client-portal/payment/failure",
         }
     });
 

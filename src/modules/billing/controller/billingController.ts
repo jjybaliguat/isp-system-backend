@@ -515,14 +515,46 @@ export const getBillings = async (req: Request, res: Response) => {
     }
 }
 
-export const getBillingById = async (req: Request, res: Response) => {
+export const getUnpaidBillingById = async (req: Request, res: Response) => {
     const { id } = req.params as { id: string }
 
     try {
         const bill = await prisma.billing.findUnique({
             where: {
                 id,
-                status: "PENDING"
+                status: {
+                  in: ["PENDING", "OVERDUE", "PARTIALLY_PAID"]
+                }
+            },
+            include: {
+                client: true,
+                account: {
+                    include: {
+                        client: true
+                    }
+                },
+                billingCharges: true,
+                discounts: true
+            }
+        })
+
+        if(!bill){
+            return res.status(404).json({message: "Bill not found"})
+        }
+
+        return res.status(200).json(bill)
+    } catch (error) {
+        console.log(error)
+        return res.status(500).json({message: "Internal Server Error"})
+    }
+}
+export const getBillingById = async (req: Request, res: Response) => {
+    const { id } = req.params as { id: string }
+
+    try {
+        const bill = await prisma.billing.findUnique({
+            where: {
+                id
             },
             include: {
                 client: true,

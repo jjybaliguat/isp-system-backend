@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { confirmPayment, createBilling, createBillingForAccount, deleteBilling, generateBillingForAllAccounts, getBillingByAccountNumber, getBillingById, getBillings, getFullYearBillingById, sendEmailReminder, sendSmsReminder, updateBillingForAccount } from "../controller/billingController";
+import { confirmPayment, createBilling, createBillingForAccount, deleteBilling, generateBillingForAllAccounts, getBillingByAccountNumber, getBillingById, getBillings, getFullYearBillingById, getUnpaidBillingById, sendEmailReminder, sendSmsReminder, updateBillingForAccount } from "../controller/billingController";
 import { authenticateProvider } from "../../../middlewares/authMiddleware";
 
 const router = Router();
@@ -14,6 +14,7 @@ router.post('/send-sms-reminder/:id', authenticateProvider, sendSmsReminder)
 router.get('/', authenticateProvider, getBillings)
 router.get('/get-fullyear-billing/:id', authenticateProvider, getFullYearBillingById)
 router.get('/get-bills/:accountNumber', getBillingByAccountNumber)
+router.get('/unpaid/:id', getUnpaidBillingById)
 router.get('/:id', getBillingById)
 router.delete('/:id', authenticateProvider, deleteBilling)
 

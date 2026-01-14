@@ -36,7 +36,7 @@ export async function sendInvoiceReminderEmail(
     const transporter = nodemailer.createTransport({
       host: emailCredentials.emailHost,
       port: emailCredentials.emailPort || 465,
-      secure: process.env.NODE_ENV === "production" ? true : false,
+      secure: emailCredentials.emailPort === 465,
       auth: {
         user: emailCredentials.emailUser,
         pass: emailCredentials.emailPass,

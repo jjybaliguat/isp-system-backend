@@ -217,7 +217,7 @@ export const updateTicket = async (req: Request, res: Response) => {
         ? null
         : assignedToEmployeeId || ticket.assignedToEmployeeId,
     };
-
+    
     const updatedTicket = await prisma.ticket.update({
     where: { id, providerId },
     data: {
