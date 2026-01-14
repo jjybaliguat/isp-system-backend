@@ -7,6 +7,7 @@ interface VariableProps {
   phone?: string;
   companyName?: string;
   link?: string;
+  websiteLink?: string;
   period?: string;
   billingDay?: string;
 }

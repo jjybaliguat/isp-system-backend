@@ -86,7 +86,7 @@ export const getPayments = async(req: Request, res: Response) => {
               }
             }
             },
-            orderBy: { paidAt: "desc" },
+            orderBy: { createdAt: "desc" },
             skip,
             take: limit,
         }),

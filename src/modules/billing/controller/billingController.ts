@@ -250,6 +250,7 @@ export const createBillingForAccount = async (req: Request, res: Response) => {
               period: billing.period!,
               companyName: provider.companyName || "",
               link: `https://sierracommunication.net/checkout/payment/${billing.id}`,
+              websiteLink: process.env.WEBSITE_LINK!,
               email: billing.client.email || "",
               phone: billing.client.phoneNumber || ""
             },
@@ -858,6 +859,7 @@ export const confirmPayment = async (req: Request, res: Response) => {
                   phone: updatedBill.client.phoneNumber || "",
                   amount: amount.toString(),
                   period: updatedBill.period || "",
+                  websiteLink: process.env.WEBSITE_LINK!,
                 },
                 decryptedKey
               );
@@ -1218,6 +1220,7 @@ export const generateBillingForAllAccounts = async (req: Request, res: Response)
                   period: billing!.period!,
                   companyName: provider.companyName || "",
                   link: `https://sierracommunication.net/checkout/payment/${billing!.id}`,
+                  websiteLink: process.env.WEBSITE_LINK!,
                   email: billing!.client.email || "",
                   phone: billing!.client.phoneNumber || ""
                 },

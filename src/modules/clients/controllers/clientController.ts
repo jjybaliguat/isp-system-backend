@@ -262,8 +262,8 @@ export const getClientsAnalytics = async(req: Request, res: Response) => {
             where: {
                 providerId,
                 installationDate: {
-                gte: dayStart,
-                lte: dayEnd,
+                    gte: dayStart,
+                    lte: dayEnd,
                 },
                 status: "ACTIVE", // or your "NEW" equivalent
             },
@@ -565,6 +565,7 @@ export const createClient = async(req: Request, res: Response) => {
                     phone: client.phoneNumber || "",
                     amount: client.servicePlan?.monthlyFee.toString() || "",
                     link: "https://sierracommunication.net",
+                    websiteLink: process.env.WEBSITE_LINK!,
                     dueDate
                 },
                 decryptedKey
