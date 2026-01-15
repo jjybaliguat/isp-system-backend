@@ -459,7 +459,7 @@ export const createClient = async(req: Request, res: Response) => {
 
     const installDate = new Date(installationDate);
     if (isNaN(installDate.getTime())) {
-        return res.status(400).json({ installationDate: 'installationDate must be a valid date' });
+        return res.status(400).json({ message: 'installationDate must be a valid date' });
     }
 
         // Check for missing fields
@@ -538,18 +538,26 @@ export const createClient = async(req: Request, res: Response) => {
 
             const hashedPassword = await bcrypt.hash("admin123456", 10);
 
-            const user = await tx.user.create({
-                data: {
-                email: client.email,
-                password: hashedPassword,
-                fullName: client.fullName,
-                clientId: client.id,
-                providerId,
-                role: "CLIENT",
+            const userExist = await tx.user.findUnique({
+                where: {
+                    email: client.email
+                }
+            })
+
+            if(!userExist){
+                await tx.user.create({
+                    data: {
+                    email: client.email,
+                    password: hashedPassword,
+                    fullName: client.fullName,
+                    clientId: client.id,
+                    providerId,
+                    role: "CLIENT",
                 },
             });
+            }
 
-            return { client, account, user };
+            return { client, account };
             });
 
 

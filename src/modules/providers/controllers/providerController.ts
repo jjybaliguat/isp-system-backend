@@ -77,6 +77,67 @@ export const getProviders = async (req: Request, res: Response) => {
     }
 }
 
+export const getProvidersWithFilteredResponse = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const provider = await prisma.provider.findFirst({
+      where: {
+        OR: [
+          { companyName: { contains: 'sierra', mode: 'insensitive' } },
+          { email: { contains: 'sierra', mode: 'insensitive' } },
+        ],
+        parentProviderId: null
+      },
+      select: {
+        id: true,
+        companyName: true,
+        email: true,
+        servicePlans: true,
+        coverage: true,
+        branches: {
+          select: {
+            id: true,
+            name: true,
+            servicePlans: true,
+            coverage: true,
+          },
+        },
+      },
+    });
+
+    if (!provider) {
+      return res.status(404).json({ message: 'Provider not found' });
+    }
+
+    // 🔁 Merge main provider + branches into ONE array
+    const unifiedProviders = [
+      {
+        id: provider.id,
+        name: provider.companyName,
+        email: provider.email,
+        servicePlans: provider.servicePlans,
+        coverage: provider.coverage,
+        type: 'MAIN',
+      },
+      ...provider.branches.map((branch) => ({
+        id: branch.id,
+        name: branch.name,
+        servicePlans: branch.servicePlans,
+        coverage: branch.coverage,
+        parentProviderId: provider.id,
+        type: 'BRANCH',
+      })),
+    ];
+
+    return res.status(200).json(unifiedProviders);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Failed to fetch provider' });
+  }
+};
+
 export const getProviderById = async (req: Request, res: Response) => {
     const { id } = req.params as { id: string }
 

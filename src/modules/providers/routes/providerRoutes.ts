@@ -1,10 +1,11 @@
 import { Router } from 'express';
-import {  createProvider, createSmsIntegrationSettings, deleteProvider, getProvider, getProviderById, getProviders, getSmsIntegrationSettings, getStoredKey, testSemaphoreConnection, testXenditConnection, updateAccount, updateSemaphoreKey, updateXenditKey } from '../controllers/providerController';
+import {  createProvider, createSmsIntegrationSettings, deleteProvider, getProvider, getProviderById, getProviders, getProvidersWithFilteredResponse, getSmsIntegrationSettings, getStoredKey, testSemaphoreConnection, testXenditConnection, updateAccount, updateSemaphoreKey, updateXenditKey } from '../controllers/providerController';
 import { authenticateProvider, validateProviderSmsKey, validateProviderXenditKey } from '../../../middlewares/authMiddleware';
 
 const router = Router();
 
 router.get('/', authenticateProvider, getProviders);
+router.get('/get-providers', getProvidersWithFilteredResponse)
 router.get('/get-provider', authenticateProvider, getProvider);
 router.patch('/update-account', authenticateProvider, updateAccount);
 // router.get('/:id', getProviderById);

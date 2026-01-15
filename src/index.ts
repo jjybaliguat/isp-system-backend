@@ -17,6 +17,7 @@ import employeesRoute from './modules/employees/routes/employeeRoute'
 import teamsRoute from './modules/teams/routes/teamsRoute' 
 import smsRoute from './modules/sms/routes/smsRoute' 
 import coverageRoute from './modules/coverage/routes/coverageRoute' 
+import applicantRoutes from './modules/applicants/routes/applicantRoutes'
 import uploadImageRoute from './modules/upload-image/uploadImageRoute' 
 import settingsRoute from './modules/settings/settingsRoute' 
 import hierarchyRoute from './modules/network-hierarchy/network-hierarchy-route' 
@@ -81,6 +82,7 @@ app.use("/api/employees", employeesRoute)
 app.use("/api/teams", teamsRoute)
 app.use("/api/sms", smsRoute)
 app.use("/api/coverage", coverageRoute)
+app.use('/api/applicants', applicantRoutes)
 app.use("/api/upload-image", uploadImageRoute)
 app.use("/api/settings", settingsRoute)
 app.use("/api/network-hierarchy", hierarchyRoute)

@@ -285,6 +285,7 @@ model Provider {
   odps ODP[]
 
   conversations Conversation[]
+  applicants Applicant[]
 }
 
 enum BranchStatus {
@@ -334,6 +335,7 @@ model Coverage {
   updatedAt DateTime @updatedAt
 
   @@unique([name, providerId])
+  applicants Applicant[]
 }
 
 model ServicePlan {
@@ -351,6 +353,8 @@ model ServicePlan {
   clients      Client[]
 
   accounts Accounts[]
+
+  applicants Applicant[]
 }
 
 
@@ -634,6 +638,36 @@ enum TicketCategory {
   SERVICE
   REPAIR
   GENERAL
+}
+
+model Applicant {
+  id String @id @default(uuid()) @db.Uuid
+  name         String
+  applicationNumber String? @unique
+  email        String  @unique
+  phone        String?
+  address      String?
+  notes        String?
+  idType       String
+  idCardNumber  String?
+  coverageId   String? @db.Uuid
+  coverage     Coverage? @relation(fields: [coverageId], references: [id], onDelete: SetNull)
+  servicePlanId String? @db.Uuid
+  servicePlan  ServicePlan? @relation(fields: [servicePlanId], references: [id], onDelete: SetNull)
+  providerId   String? @db.Uuid
+  provider     Provider? @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  applicationStatus ApplicationStatus @default(PENDING)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+enum ApplicationStatus {
+  PENDING
+  PROCESSING
+  ONGOING
+  INSTALLED
+  REJECTED
+  CANCELLED
 }
 
 // System's chat models
