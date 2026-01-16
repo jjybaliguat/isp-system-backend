@@ -7,7 +7,9 @@ interface VariableProps {
     phone?: string;
     companyName?: string;
     link?: string;
+    websiteLink?: string;
     period?: string;
+    password?: string;
     billingDay?: string;
 }
 export declare function sendSms(phoneNumber: string, template: string, data: VariableProps, apiKey: string): Promise<any>;

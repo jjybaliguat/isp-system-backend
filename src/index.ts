@@ -26,6 +26,7 @@ import cookieParser from "cookie-parser";
 import { registerTenantJobs } from "./jobs/jobManager";
 import cron from 'node-cron'
 import { checkOverdueInvoices } from './jobs/checkOverdueInvoices';
+import { scheduleDailyBackups } from './jobs/dailyBackups';
 import { PrismaClient } from "@prisma/client";
 import { sendSmsWhenTheBillIsDue } from './jobs/sendSmsWhenTheBillIsDue';
 
@@ -98,6 +99,9 @@ cron.schedule('0 0 * * *', async () => {
     console.error("Error in daily cron job:", error);
   }
 }, { timezone: "Asia/Manila" });
+
+// Schedule daily provider backups (providers with dailyBackup=true)
+scheduleDailyBackups();
 
 
 app.listen(PORT, () => {

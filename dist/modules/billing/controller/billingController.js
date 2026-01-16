@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateBillingForAllAccounts = exports.sendSmsReminder = exports.sendEmailReminder = exports.confirmPayment = exports.deleteBilling = exports.getFullYearBillingById = exports.getBillingById = exports.getBillings = exports.getBillingByAccountNumber = exports.updateBillingForAccount = exports.createBillingForAccount = exports.createBilling = void 0;
+exports.generateBillingForAllAccounts = exports.sendSmsReminder = exports.sendEmailReminder = exports.confirmPayment = exports.deleteBilling = exports.getFullYearBillingById = exports.getBillingById = exports.getUnpaidBillingById = exports.getBillings = exports.getBillingByAccountNumber = exports.updateBillingForAccount = exports.createBillingForAccount = exports.createBilling = void 0;
 const ua_parser_js_1 = require("ua-parser-js");
 const date_fns_1 = require("date-fns");
 const client_1 = require("@prisma/client");
@@ -180,8 +180,10 @@ const createBillingForAccount = async (req, res) => {
                         period: billing.period,
                         companyName: provider.companyName || "",
                         link: `https://sierracommunication.net/checkout/payment/${billing.id}`,
+                        websiteLink: process.env.WEBSITE_LINK,
                         email: billing.client.email || "",
-                        phone: billing.client.phoneNumber || ""
+                        phone: billing.client.phoneNumber || "",
+                        billingDay: billing.client.billingDay?.toString()
                     }, decryptedKey);
                 }
                 catch (error) {
@@ -424,13 +426,44 @@ const getBillings = async (req, res) => {
     }
 };
 exports.getBillings = getBillings;
-const getBillingById = async (req, res) => {
+const getUnpaidBillingById = async (req, res) => {
     const { id } = req.params;
     try {
         const bill = await prisma.billing.findUnique({
             where: {
                 id,
-                status: "PENDING"
+                status: {
+                    in: ["PENDING", "OVERDUE", "PARTIALLY_PAID"]
+                }
+            },
+            include: {
+                client: true,
+                account: {
+                    include: {
+                        client: true
+                    }
+                },
+                billingCharges: true,
+                discounts: true
+            }
+        });
+        if (!bill) {
+            return res.status(404).json({ message: "Bill not found" });
+        }
+        return res.status(200).json(bill);
+    }
+    catch (error) {
+        console.log(error);
+        return res.status(500).json({ message: "Internal Server Error" });
+    }
+};
+exports.getUnpaidBillingById = getUnpaidBillingById;
+const getBillingById = async (req, res) => {
+    const { id } = req.params;
+    try {
+        const bill = await prisma.billing.findUnique({
+            where: {
+                id
             },
             include: {
                 client: true,
@@ -672,6 +705,7 @@ const confirmPayment = async (req, res) => {
                         phone: updatedBill.client.phoneNumber || "",
                         amount: amount.toString(),
                         period: updatedBill.period || "",
+                        websiteLink: process.env.WEBSITE_LINK
                     }, decryptedKey);
                 }
                 catch (error) {
@@ -961,8 +995,10 @@ const generateBillingForAllAccounts = async (req, res) => {
                             period: billing.period,
                             companyName: provider.companyName || "",
                             link: `https://sierracommunication.net/checkout/payment/${billing.id}`,
+                            websiteLink: process.env.WEBSITE_LINK,
                             email: billing.client.email || "",
-                            phone: billing.client.phoneNumber || ""
+                            phone: billing.client.phoneNumber || "",
+                            billingDay: billing?.client.billingDay?.toString()
                         }, decryptedKey);
                     }
                 }

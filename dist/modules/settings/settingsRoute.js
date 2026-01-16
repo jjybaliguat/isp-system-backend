@@ -11,5 +11,6 @@ router.patch('/notifications', authMiddleware_1.authenticateProvider, settingsCo
 router.patch('/payment', authMiddleware_1.authenticateProvider, settingsController_1.updatePaymentSettings);
 router.patch('/billing', authMiddleware_1.authenticateProvider, settingsController_1.updateBillingSettings);
 router.patch('/document', authMiddleware_1.authenticateProvider, settingsController_1.updateDocumentsSettings);
+router.patch('/backup', authMiddleware_1.authenticateProvider, settingsController_1.updateBackupSettings);
 exports.default = router;
 //# sourceMappingURL=settingsRoute.js.map

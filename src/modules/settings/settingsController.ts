@@ -192,3 +192,25 @@ export const updateDocumentsSettings = async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
+export const updateBackupSettings = async(req: Request, res: Response) => {
+  const {providerId} = req.user as {providerId: string}
+  const {enabled, backUpEmail} = req.body
+
+  try {
+    const updateProvider = await prisma.provider.update({
+      where: {
+        id: providerId
+      },
+      data: {
+        dailyBackup: enabled,
+        backUpEmail
+      }
+    })
+
+    return res.status(200).json(updateProvider)
+  } catch (error) {
+    console.log(error)
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}

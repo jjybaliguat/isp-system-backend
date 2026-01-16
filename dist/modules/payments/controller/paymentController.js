@@ -83,7 +83,7 @@ const getPayments = async (req, res) => {
                         }
                     }
                 },
-                orderBy: { paidAt: "desc" },
+                orderBy: { createdAt: "desc" },
                 skip,
                 take: limit,
             }),
@@ -144,7 +144,7 @@ const createPayment = async (req, res) => {
             orderBy: { createdAt: "desc" },
         });
         // ✅ Reuse ONLY if amount still matches outstanding balance
-        if (existingPayment && Number(existingPayment.amount) === outstandingAmount) {
+        if (existingPayment && Number(existingPayment.amount) === (outstandingAmount + provider.paymentConvenienceFee)) {
             return res.status(200).json({
                 message: "Payment already exists",
                 payment: existingPayment,
@@ -162,15 +162,17 @@ const createPayment = async (req, res) => {
             });
         }
         // Create Xendit Invoice
+        const invoiceDuration = (provider.invoiceDurationDays ?? 1) * 24 * 60 * 60;
         const invoice = await Invoice.createInvoice({
             data: {
                 externalId: `${billing.invoiceNumber}-${Date.now()}`,
                 payerEmail: billing.client.email,
                 description: billing.description || `Payment for billing #${billing.client.accountNumber}`,
                 amount: outstandingAmount + provider.paymentConvenienceFee,
+                invoiceDuration,
                 shouldSendEmail: true,
-                successRedirectUrl: `https://sierracommunication.net/payment-success/${billing.id}`,
-                failureRedirectUrl: "https://sierracommunication.net/payment-failure",
+                successRedirectUrl: `https://sierracommunication.net/client-portal/payment/success?id=${billing.id}`,
+                failureRedirectUrl: "https://sierracommunication.net/client-portal/payment/failure",
             }
         });
         // Create Payment record in DB

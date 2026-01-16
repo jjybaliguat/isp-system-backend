@@ -253,6 +253,8 @@ model Provider {
   semaphoreApiKey String? @unique
   paymentConvenienceFee Int @default(15)
   invoiceDurationDays Int @default(1)
+  dailyBackup Boolean @default(false)
+  backUpEmail String?
 
   // Relations
   clientTypes    ClientType[]

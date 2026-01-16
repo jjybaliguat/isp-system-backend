@@ -13,7 +13,6 @@ const getSms = async (req, res) => {
             headers: { "Content-Type": "application/json" },
         });
         const data = await response.json();
-        console.log(data[0]);
         if (!Array.isArray(data)) {
             return res.status(400).json({ message: "Invalid API Key" });
         }

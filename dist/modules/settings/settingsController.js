@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateDocumentsSettings = exports.updateBillingSettings = exports.updatePaymentSettings = exports.updateNotificationsSettings = void 0;
+exports.updateBackupSettings = exports.updateDocumentsSettings = exports.updateBillingSettings = exports.updatePaymentSettings = exports.updateNotificationsSettings = void 0;
 const jobManager_1 = require("../../jobs/jobManager");
 const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
@@ -166,4 +166,25 @@ const updateDocumentsSettings = async (req, res) => {
     }
 };
 exports.updateDocumentsSettings = updateDocumentsSettings;
+const updateBackupSettings = async (req, res) => {
+    const { providerId } = req.user;
+    const { enabled, backUpEmail } = req.body;
+    try {
+        const updateProvider = await prisma.provider.update({
+            where: {
+                id: providerId
+            },
+            data: {
+                dailyBackup: enabled,
+                backUpEmail
+            }
+        });
+        return res.status(200).json(updateProvider);
+    }
+    catch (error) {
+        console.log(error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+};
+exports.updateBackupSettings = updateBackupSettings;
 //# sourceMappingURL=settingsController.js.map

@@ -14,6 +14,7 @@ router.post('/send-sms-reminder/:id', authMiddleware_1.authenticateProvider, bil
 router.get('/', authMiddleware_1.authenticateProvider, billingController_1.getBillings);
 router.get('/get-fullyear-billing/:id', authMiddleware_1.authenticateProvider, billingController_1.getFullYearBillingById);
 router.get('/get-bills/:accountNumber', billingController_1.getBillingByAccountNumber);
+router.get('/unpaid/:id', billingController_1.getUnpaidBillingById);
 router.get('/:id', billingController_1.getBillingById);
 router.delete('/:id', authMiddleware_1.authenticateProvider, billingController_1.deleteBilling);
 exports.default = router;

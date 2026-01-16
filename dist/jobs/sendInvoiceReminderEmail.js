@@ -18,7 +18,7 @@ async function sendInvoiceReminderEmail(templateMd, emailCredentials, recipient,
         const transporter = nodemailer_1.default.createTransport({
             host: emailCredentials.emailHost,
             port: emailCredentials.emailPort || 465,
-            secure: process.env.NODE_ENV === "production" ? true : false,
+            secure: emailCredentials.emailPort === 465,
             auth: {
                 user: emailCredentials.emailUser,
                 pass: emailCredentials.emailPass,

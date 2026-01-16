@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getSmsIntegrationSettings = exports.createSmsIntegrationSettings = exports.updateAccount = exports.testSemaphoreConnection = exports.testXenditConnection = exports.getStoredKey = exports.updateSemaphoreKey = exports.updateXenditKey = exports.deleteProvider = exports.updateProvider = exports.createProvider = exports.getProviderById = exports.getProviders = exports.getProvider = void 0;
+exports.getSmsIntegrationSettings = exports.createSmsIntegrationSettings = exports.updateAccount = exports.testSemaphoreConnection = exports.testXenditConnection = exports.getStoredKey = exports.updateSemaphoreKey = exports.updateXenditKey = exports.deleteProvider = exports.updateProvider = exports.createProvider = exports.getProviderById = exports.getProvidersWithFilteredResponse = exports.getProviders = exports.getProvider = void 0;
 const uuid_1 = require("uuid");
 const client_1 = require("@prisma/client");
 const hasher_1 = require("../../../utils/hasher");
@@ -77,6 +77,62 @@ const getProviders = async (req, res) => {
     }
 };
 exports.getProviders = getProviders;
+const getProvidersWithFilteredResponse = async (req, res) => {
+    try {
+        const provider = await prisma.provider.findFirst({
+            where: {
+                OR: [
+                    { companyName: { contains: 'sierra', mode: 'insensitive' } },
+                    { email: { contains: 'sierra', mode: 'insensitive' } },
+                ],
+                parentProviderId: null
+            },
+            select: {
+                id: true,
+                companyName: true,
+                email: true,
+                servicePlans: true,
+                coverage: true,
+                branches: {
+                    select: {
+                        id: true,
+                        name: true,
+                        servicePlans: true,
+                        coverage: true,
+                    },
+                },
+            },
+        });
+        if (!provider) {
+            return res.status(404).json({ message: 'Provider not found' });
+        }
+        // 🔁 Merge main provider + branches into ONE array
+        const unifiedProviders = [
+            {
+                id: provider.id,
+                name: provider.companyName,
+                email: provider.email,
+                servicePlans: provider.servicePlans,
+                coverage: provider.coverage,
+                type: 'MAIN',
+            },
+            ...provider.branches.map((branch) => ({
+                id: branch.id,
+                name: branch.name,
+                servicePlans: branch.servicePlans,
+                coverage: branch.coverage,
+                parentProviderId: provider.id,
+                type: 'BRANCH',
+            })),
+        ];
+        return res.status(200).json(unifiedProviders);
+    }
+    catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Failed to fetch provider' });
+    }
+};
+exports.getProvidersWithFilteredResponse = getProvidersWithFilteredResponse;
 const getProviderById = async (req, res) => {
     const { id } = req.params;
     try {
@@ -196,25 +252,52 @@ const deleteProvider = async (req, res) => {
 };
 exports.deleteProvider = deleteProvider;
 const updateXenditKey = async (req, res) => {
-    const { key } = req.body;
+    const { apiKey, convenienceFee, expiration } = req.body;
     const { providerId, role } = req.user;
-    if (role !== client_1.UserRole.SUPERADMIN)
-        return res.status(401).json({ message: "You are not allowed to perform this operation" });
-    try {
-        const encryptedKey = (0, hasher_1.encrypt)(key);
-        const newKey = await prisma.provider.update({
-            where: {
-                id: providerId
-            },
-            data: {
-                xenditApiKey: encryptedKey
-            }
+    if (role !== client_1.UserRole.SUPERADMIN) {
+        return res.status(403).json({
+            message: "You are not allowed to perform this operation",
         });
-        return res.status(200).json(newKey.xenditApiKey);
+    }
+    try {
+        const data = {};
+        if (apiKey && apiKey.trim() !== "") {
+            data.xenditApiKey = (0, hasher_1.encrypt)(apiKey);
+        }
+        if (expiration !== undefined) {
+            const days = Number(expiration);
+            if (!Number.isFinite(days) || days <= 0) {
+                return res.status(400).json({
+                    message: "Invoice expiration must be a positive number",
+                });
+            }
+            data.invoiceDurationDays = days;
+        }
+        if (convenienceFee !== undefined) {
+            const fee = Number(convenienceFee);
+            if (!Number.isFinite(fee) || fee < 0) {
+                return res.status(400).json({
+                    message: "Convenience fee must be 0 or greater",
+                });
+            }
+            data.paymentConvenienceFee = fee;
+        }
+        if (Object.keys(data).length === 0) {
+            return res.status(400).json({
+                message: "No valid fields provided for update",
+            });
+        }
+        await prisma.provider.update({
+            where: { id: providerId },
+            data,
+        });
+        return res.status(200).json({
+            message: "Xendit settings updated successfully",
+        });
     }
     catch (error) {
-        console.log(error);
-        res.status(500).json({ message: 'Internal server error' });
+        console.error("updateXenditKey error:", error);
+        return res.status(500).json({ message: "Internal server error" });
     }
 };
 exports.updateXenditKey = updateXenditKey;
@@ -244,16 +327,25 @@ exports.updateSemaphoreKey = updateSemaphoreKey;
 const getStoredKey = async (req, res) => {
     const { providerId } = req.user;
     try {
-        const keys = await prisma.provider.findUnique({
+        const provider = await prisma.provider.findUnique({
             where: {
                 id: providerId
             },
             select: {
                 xenditApiKey: true,
-                semaphoreApiKey: true
+                semaphoreApiKey: true,
+                paymentConvenienceFee: true,
+                invoiceDurationDays: true
             }
         });
-        return res.status(200).json({ xenditApiKey: keys?.xenditApiKey, semaphoreApiKey: keys?.semaphoreApiKey });
+        return res.status(200).json({
+            xendit: {
+                apiKey: provider?.xenditApiKey,
+                convenienceFee: provider?.paymentConvenienceFee,
+                expiration: provider?.invoiceDurationDays
+            },
+            semaphoreApiKey: provider?.semaphoreApiKey
+        });
     }
     catch (error) {
         console.log(error);

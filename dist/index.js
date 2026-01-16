@@ -21,6 +21,8 @@ const employeeRoute_1 = __importDefault(require("./modules/employees/routes/empl
 const teamsRoute_1 = __importDefault(require("./modules/teams/routes/teamsRoute"));
 const smsRoute_1 = __importDefault(require("./modules/sms/routes/smsRoute"));
 const coverageRoute_1 = __importDefault(require("./modules/coverage/routes/coverageRoute"));
+const applicantRoutes_1 = __importDefault(require("./modules/applicants/routes/applicantRoutes"));
+const adminRoutes_1 = __importDefault(require("./modules/admin/routes/adminRoutes"));
 const uploadImageRoute_1 = __importDefault(require("./modules/upload-image/uploadImageRoute"));
 const settingsRoute_1 = __importDefault(require("./modules/settings/settingsRoute"));
 const network_hierarchy_route_1 = __importDefault(require("./modules/network-hierarchy/network-hierarchy-route"));
@@ -28,6 +30,7 @@ const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const jobManager_1 = require("./jobs/jobManager");
 const node_cron_1 = __importDefault(require("node-cron"));
 const checkOverdueInvoices_1 = require("./jobs/checkOverdueInvoices");
+const dailyBackups_1 = require("./jobs/dailyBackups");
 const client_1 = require("@prisma/client");
 const sendSmsWhenTheBillIsDue_1 = require("./jobs/sendSmsWhenTheBillIsDue");
 const prisma = new client_1.PrismaClient();
@@ -78,6 +81,8 @@ app.use("/api/employees", employeeRoute_1.default);
 app.use("/api/teams", teamsRoute_1.default);
 app.use("/api/sms", smsRoute_1.default);
 app.use("/api/coverage", coverageRoute_1.default);
+app.use('/api/applicants', applicantRoutes_1.default);
+app.use('/api/admin', adminRoutes_1.default);
 app.use("/api/upload-image", uploadImageRoute_1.default);
 app.use("/api/settings", settingsRoute_1.default);
 app.use("/api/network-hierarchy", network_hierarchy_route_1.default);
@@ -91,6 +96,8 @@ node_cron_1.default.schedule('0 0 * * *', async () => {
         console.error("Error in daily cron job:", error);
     }
 }, { timezone: "Asia/Manila" });
+// Schedule daily provider backups (providers with dailyBackup=true)
+(0, dailyBackups_1.scheduleDailyBackups)();
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });

@@ -5,6 +5,7 @@ const providerController_1 = require("../controllers/providerController");
 const authMiddleware_1 = require("../../../middlewares/authMiddleware");
 const router = (0, express_1.Router)();
 router.get('/', authMiddleware_1.authenticateProvider, providerController_1.getProviders);
+router.get('/get-providers', providerController_1.getProvidersWithFilteredResponse);
 router.get('/get-provider', authMiddleware_1.authenticateProvider, providerController_1.getProvider);
 router.patch('/update-account', authMiddleware_1.authenticateProvider, providerController_1.updateAccount);
 // router.get('/:id', getProviderById);

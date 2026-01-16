@@ -181,7 +181,6 @@ const updateTicket = async (req, res) => {
     const { id } = req.params;
     const { id: userId, providerId } = req.user;
     const { assignedToTeamId, assignedToEmployeeId } = body;
-    console.log("Request Body:", body);
     try {
         // Get the existing ticket first
         const ticket = await prisma.ticket.findUnique({
@@ -198,8 +197,6 @@ const updateTicket = async (req, res) => {
                 ? null
                 : assignedToEmployeeId || ticket.assignedToEmployeeId,
         };
-        // Update the ticket
-        console.log("Updated Assignment:", updatedAssignment);
         const updatedTicket = await prisma.ticket.update({
             where: { id, providerId },
             data: {
