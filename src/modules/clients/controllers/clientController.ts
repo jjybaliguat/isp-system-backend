@@ -10,6 +10,7 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
+
 export const getClients = async (req: Request, res: Response) => {
   const { id: userId, providerId } = req.user;
   const page = Number(req.query.page) || 1;
@@ -543,7 +544,6 @@ export const createClient = async(req: Request, res: Response) => {
                     email: client.email
                 }
             })
-
             if(!userExist){
                 await tx.user.create({
                     data: {
