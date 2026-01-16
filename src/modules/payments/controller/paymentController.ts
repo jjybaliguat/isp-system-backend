@@ -238,26 +238,100 @@ export const createPayment = async (req: Request, res: Response) => {
 };
 
 export const xenditWebhook = async (req: Request, res: Response) => {
-  const {
-    id: xenditInvoiceId,
-    status,
-    amount,
-    external_id,
-    paid_at,
-    payment_channel,
-  } = req.body;
-  console.log(req.body)
-  try {
-    if (!xenditInvoiceId || !status) {
-      return res.status(400).json({ message: "Invalid webhook payload" });
-    }
 
-    const payment = await prisma.payment.findUnique({
-      where: { xenditInvoiceId },
-    });
+  // Defensive: ensure req.body is an object
+  if (!req.body || typeof req.body !== 'object') {
+    return res.status(400).json({ message: "Missing or invalid request body" });
+  }
+
+  // Extract fields with fallback to undefined
+  const xenditInvoiceId = req.body.id;
+  const status = req.body.status;
+  const amount = req.body.amount;
+  const external_id = req.body.external_id;
+  const paid_at = req.body.paid_at;
+  const payment_channel = req.body.payment_channel;
+
+  // Validate required fields for all webhook events
+  if (!xenditInvoiceId || typeof xenditInvoiceId !== 'string') {
+    return res.status(400).json({ message: "Missing or invalid 'id' in webhook payload" });
+  }
+  if (!status || typeof status !== 'string') {
+    return res.status(400).json({ message: "Missing or invalid 'status' in webhook payload" });
+  }
+
+  // For PAID status, require additional fields
+  if (status === 'PAID') {
+    if (!paid_at || typeof paid_at !== 'string') {
+      return res.status(400).json({ message: "Missing or invalid 'paid_at' for PAID status" });
+    }
+    if (!payment_channel || typeof payment_channel !== 'string') {
+      return res.status(400).json({ message: "Missing or invalid 'payment_channel' for PAID status" });
+    }
+  }
+
+  try {
+
+    const payment = await prisma.payment.findUnique({ where: { xenditInvoiceId } });
 
     if (!payment) {
-      return res.status(404).json({ message: "Payment not found" });
+      // Gateway behavior: forward to legacy webhook URL if payment not found locally
+      const forwardUrl = 'https://sierracommunication.com/xendit/payinvoice';
+      try {
+        // Build headers to forward (only string values)
+        const forwardHeaders: Record<string, string> = {};
+        for (const [k, v] of Object.entries(req.headers)) {
+          if (!v) continue;
+          if (typeof v === 'string') forwardHeaders[k] = v;
+          else if (Array.isArray(v)) forwardHeaders[k] = v.join(',');
+          else forwardHeaders[k] = String(v);
+        }
+
+        // Ensure content-type present
+        if (!forwardHeaders['content-type']) forwardHeaders['content-type'] = 'application/json';
+
+        // Use global fetch if available (Node 18+), otherwise fall back to a simple https request
+        if ((globalThis as any).fetch) {
+          const resp = await (globalThis as any).fetch(forwardUrl, {
+            method: 'POST',
+            headers: forwardHeaders,
+            body: JSON.stringify(req.body),
+          });
+          const text = await resp.text();
+          return res.status(resp.status).send(text);
+        } else {
+          // fallback using https module
+          const https = require('https');
+          const url = require('url');
+          const u = url.parse(forwardUrl);
+          const options = {
+            hostname: u.hostname,
+            port: u.port || 443,
+            path: u.path,
+            method: 'POST',
+            headers: forwardHeaders,
+          };
+
+          await new Promise<void>((resolve, reject) => {
+            const reqForward = https.request(options, (r: any) => {
+              const chunks: Buffer[] = [];
+              r.on('data', (c: Buffer) => chunks.push(c));
+              r.on('end', () => {
+                const respText = Buffer.concat(chunks).toString('utf8');
+                res.status(r.statusCode || 200).send(respText);
+                resolve();
+              });
+            });
+            reqForward.on('error', (err: any) => reject(err));
+            reqForward.write(JSON.stringify(req.body));
+            reqForward.end();
+          });
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to forward webhook to legacy endpoint', err);
+        return res.status(502).json({ message: 'Payment not found locally; failed to forward to legacy webhook' });
+      }
     }
 
     if (payment.status !== "PENDING") {
