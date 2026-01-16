@@ -49,17 +49,19 @@ export const loginController = async (req: Request, res: Response) => {
         });
         
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
-        .create({
-            data: {
-            action: "LOGIN",
-            entity: "User",
-            userId: user.id,
-            message: `User ${user.email} has logged in.`,
-            providerId: user.providerId,
-            },
-        })
-        .catch(console.error);
+        if(!(user.role === "CLIENT")){
+            prisma.log
+            .create({
+                data: {
+                action: "LOGIN",
+                entity: "User",
+                userId: user.id,
+                message: `User ${user.email} has logged in.`,
+                providerId: user.providerId,
+                },
+            })
+            .catch(console.error);
+        }
 
 
         return res.status(200).json({ ...user, accessToken, providerType: user.provider.providerType });
@@ -187,17 +189,19 @@ export const logout = async (req: Request, res: Response) => {
     })
 
     // ---- LOG ACTION (non-blocking) ----
-        prisma.log
-        .create({
-            data: {
-            action: "LOGOUT",
-            entity: "User",
-            userId: user.id,
-            message: `User ${user.email} has logged out.`,
-            providerId: user.providerId,
-            },
-        })
-        .catch(console.error);
+        if(!(user.role === "CLIENT")){
+            prisma.log
+            .create({
+                data: {
+                action: "LOGOUT",
+                entity: "User",
+                userId: user.id,
+                message: `User ${user.email} has logged out.`,
+                providerId: user.providerId,
+                },
+            })
+            .catch(console.error);
+        }
     console.log("cookie cleared")
     res.json({ message: 'Cookie cleared' })
 }
