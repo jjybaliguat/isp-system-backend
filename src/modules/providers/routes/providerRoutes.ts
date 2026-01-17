@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import {  createProvider, createSmsIntegrationSettings, deleteProvider, getProvider, getProviderById, getProviders, getProvidersWithFilteredResponse, getSmsIntegrationSettings, getStoredKey, testSemaphoreConnection, testXenditConnection, updateAccount, updateSemaphoreKey, updateXenditKey } from '../controllers/providerController';
+import {  createProvider, createSmsIntegrationSettings, deleteProvider, getProvider, getProviderById, getProviders, getProvidersWithFilteredResponse, getSmsIntegrationSettings, getStoredKey, testSemaphoreConnection, testXenditConnection, updateAccount, updateSemaphoreKey, updateXenditKey, uploadProviderLogo } from '../controllers/providerController';
 import { authenticateProvider, validateProviderSmsKey, validateProviderXenditKey } from '../../../middlewares/authMiddleware';
+import { upload } from '../../../middlewares/imageSizeLimiter';
 
 const router = Router();
 
@@ -19,5 +20,22 @@ router.get('/sms-integration-settings', authenticateProvider, getSmsIntegrationS
 router.get('/stored-keys', authenticateProvider, getStoredKey);
 router.get('/xendit-test', authenticateProvider, validateProviderXenditKey, testXenditConnection);
 router.get('/semaphore-test', authenticateProvider, validateProviderSmsKey, testSemaphoreConnection);
+
+// Upload provider logo (single image)
+router.post('/upload-logo', authenticateProvider, async (req, res) => {
+	// multer middleware expects the upload to be invoked this way because upload is configured as .single('image')
+	upload(req, res, (err) => {
+		// if multer error occurred, return here
+		if (err) {
+			if ((err as any).code === 'LIMIT_FILE_SIZE') {
+				return res.status(400).json({ message: 'File too large. Max size is 10 MB' });
+			}
+			return res.status(400).json({ message: (err as Error).message });
+		}
+
+		// delegate to controller which will rely on req.file and req.user
+		return uploadProviderLogo(req as any, res as any);
+	});
+});
 
 export default router;

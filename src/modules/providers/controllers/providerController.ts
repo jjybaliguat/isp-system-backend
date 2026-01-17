@@ -1,5 +1,7 @@
 import e, { Request, Response } from 'express';
 import { validate as isUuid } from "uuid";
+import fs from 'fs';
+import path from 'path';
 import { ProviderType, UserRole } from '@prisma/client';
 import { decrypt, encrypt } from '../../../utils/hasher';
 import Xendit from 'xendit-node';
@@ -437,12 +439,12 @@ export const updateAccount = async(req: Request, res: Response) => {
         companyEmail,
         companyName,
         companyAddress,
-        phoneNumber,
-        companyLogoUrl
+        phoneNumber
     } = req.body
     const {providerId} = req.user
 
     try {
+        // update user first
         const updatedUser = await prisma.user.update({
             where: {
                 id: userId,
@@ -453,6 +455,8 @@ export const updateAccount = async(req: Request, res: Response) => {
                 email
             }
         })
+
+        // perform provider update
         const updatedProvider = await prisma.provider.update({
             where: {
                 id: providerId
@@ -460,11 +464,12 @@ export const updateAccount = async(req: Request, res: Response) => {
             data: {
                 companyName,
                 companyAddress,
-                companyLogoUrl,
                 phoneNumber,
                 email: companyEmail
             }
         })
+
+        // If logo changed and previous logo is a local uploads file, attempt to delete the old file
 
         const returnData = {
             fullName: updatedUser.fullName,
@@ -479,6 +484,54 @@ export const updateAccount = async(req: Request, res: Response) => {
         return res.status(200).json(returnData)
     } catch (error) {
         console.log(error)
+        return res.status(500).json({ message: 'Internal server error' })
+    }
+}
+
+// Upload provider logo handler
+export const uploadProviderLogo = async (req: Request, res: Response) => {
+    try {
+        const { providerId } = req.user as any;
+
+        if (!providerId) {
+            return res.status(401).json({ message: 'Provider not authenticated' });
+        }
+
+        // multer should have populated req.file
+        const file = (req as any).file;
+        if (!file) {
+            return res.status(400).json({ message: 'No file uploaded' });
+        }
+
+        // determine folder name from destination
+        const destination = file.destination || '';
+        const folderName = destination ? path.basename(destination) : '';
+
+        const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${folderName}/${file.filename}`;
+
+        // update provider with new logo url and delete old if needed
+        const existingProvider = await prisma.provider.findUnique({ where: { id: providerId }, select: { companyLogoUrl: true } });
+
+        const updatedProvider = await prisma.provider.update({ where: { id: providerId }, data: { companyLogoUrl: fileUrl } });
+
+        // delete old file if it was local and different
+        try {
+            if (existingProvider?.companyLogoUrl && existingProvider.companyLogoUrl !== fileUrl && existingProvider.companyLogoUrl.includes('/uploads/')) {
+                const idx = existingProvider.companyLogoUrl.indexOf('/uploads/');
+                const relPath = existingProvider.companyLogoUrl.substring(idx + '/uploads/'.length);
+                const filePath = path.join(process.cwd(), 'uploads', relPath.replace(/\//g, path.sep));
+                if (fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath);
+                }
+            }
+        } catch (delErr) {
+            console.error('Failed to delete previous logo after upload:', delErr);
+        }
+
+        return res.status(200).json({ url: fileUrl, provider: { id: updatedProvider.id, companyLogoUrl: updatedProvider.companyLogoUrl } });
+    } catch (error) {
+        console.error('uploadProviderLogo error', error);
+        return res.status(500).json({ message: 'Internal server error' });
     }
 }
 
