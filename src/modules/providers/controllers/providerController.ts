@@ -507,7 +507,11 @@ export const uploadProviderLogo = async (req: Request, res: Response) => {
         const destination = file.destination || '';
         const folderName = destination ? path.basename(destination) : '';
 
-        const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${folderName}/${file.filename}`;
+        // Force https in production so returned URLs are secure. When developing locally, use req.protocol.
+        const protocol = process.env.NODE_ENV === 'production' ? 'https' : req.protocol;
+
+        const fileUrl = `${protocol}://${req.get('host')}/uploads/${folderName}/${file.filename}`;
+
 
         // update provider with new logo url and delete old if needed
         const existingProvider = await prisma.provider.findUnique({ where: { id: providerId }, select: { companyLogoUrl: true } });
@@ -517,9 +521,13 @@ export const uploadProviderLogo = async (req: Request, res: Response) => {
         // delete old file if it was local and different
         try {
             if (existingProvider?.companyLogoUrl && existingProvider.companyLogoUrl !== fileUrl && existingProvider.companyLogoUrl.includes('/uploads/')) {
+                const uploadsRoot = path.resolve(__dirname, "../../../../uploads");
                 const idx = existingProvider.companyLogoUrl.indexOf('/uploads/');
                 const relPath = existingProvider.companyLogoUrl.substring(idx + '/uploads/'.length);
-                const filePath = path.join(process.cwd(), 'uploads', relPath.replace(/\//g, path.sep));
+                const filePath = path.join(
+                    uploadsRoot,
+                    relPath.replace(/\//g, path.sep)
+                );
                 if (fs.existsSync(filePath)) {
                     fs.unlinkSync(filePath);
                 }

@@ -21,7 +21,11 @@ router.post("/", authMiddleware_1.authenticateProvider, async (req, res) => {
         if (!req.file) {
             return res.status(400).json({ message: "No file uploaded" });
         }
-        const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+        // Determine protocol: prefer HTTPS in production, otherwise honor x-forwarded-proto or req.protocol
+        // Determine protocol: prefer HTTPS in production, otherwise honor x-forwarded-proto or req.protocol
+        // In production, force https to ensure publicly accessible HTTPS URLs are returned.
+        const protocol = process.env.NODE_ENV === 'production' ? 'https' : req.protocol;
+        const fileUrl = `${protocol}://${req.get('host')}/uploads/${req.file.filename}`;
         res.json({ url: fileUrl });
     });
 });

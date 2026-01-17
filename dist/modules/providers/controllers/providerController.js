@@ -3,8 +3,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getSmsIntegrationSettings = exports.createSmsIntegrationSettings = exports.updateAccount = exports.testSemaphoreConnection = exports.testXenditConnection = exports.getStoredKey = exports.updateSemaphoreKey = exports.updateXenditKey = exports.deleteProvider = exports.updateProvider = exports.createProvider = exports.getProviderById = exports.getProvidersWithFilteredResponse = exports.getProviders = exports.getProvider = void 0;
+exports.getSmsIntegrationSettings = exports.createSmsIntegrationSettings = exports.uploadProviderLogo = exports.updateAccount = exports.testSemaphoreConnection = exports.testXenditConnection = exports.getStoredKey = exports.updateSemaphoreKey = exports.updateXenditKey = exports.deleteProvider = exports.updateProvider = exports.createProvider = exports.getProviderById = exports.getProvidersWithFilteredResponse = exports.getProviders = exports.getProvider = void 0;
 const uuid_1 = require("uuid");
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 const client_1 = require("@prisma/client");
 const hasher_1 = require("../../../utils/hasher");
 const xendit_node_1 = __importDefault(require("xendit-node"));
@@ -386,9 +388,10 @@ const testSemaphoreConnection = async (req, res) => {
 };
 exports.testSemaphoreConnection = testSemaphoreConnection;
 const updateAccount = async (req, res) => {
-    const { userId, fullName, email, companyEmail, companyName, companyAddress, phoneNumber, companyLogoUrl } = req.body;
+    const { userId, fullName, email, companyEmail, companyName, companyAddress, phoneNumber } = req.body;
     const { providerId } = req.user;
     try {
+        // update user first
         const updatedUser = await prisma.user.update({
             where: {
                 id: userId,
@@ -399,6 +402,7 @@ const updateAccount = async (req, res) => {
                 email
             }
         });
+        // perform provider update
         const updatedProvider = await prisma.provider.update({
             where: {
                 id: providerId
@@ -406,11 +410,11 @@ const updateAccount = async (req, res) => {
             data: {
                 companyName,
                 companyAddress,
-                companyLogoUrl,
                 phoneNumber,
                 email: companyEmail
             }
         });
+        // If logo changed and previous logo is a local uploads file, attempt to delete the old file
         const returnData = {
             fullName: updatedUser.fullName,
             email: updatedUser.email,
@@ -424,9 +428,54 @@ const updateAccount = async (req, res) => {
     }
     catch (error) {
         console.log(error);
+        return res.status(500).json({ message: 'Internal server error' });
     }
 };
 exports.updateAccount = updateAccount;
+// Upload provider logo handler
+const uploadProviderLogo = async (req, res) => {
+    try {
+        const { providerId } = req.user;
+        if (!providerId) {
+            return res.status(401).json({ message: 'Provider not authenticated' });
+        }
+        // multer should have populated req.file
+        const file = req.file;
+        if (!file) {
+            return res.status(400).json({ message: 'No file uploaded' });
+        }
+        // determine folder name from destination
+        const destination = file.destination || '';
+        const folderName = destination ? path_1.default.basename(destination) : '';
+        // Force https in production so returned URLs are secure. When developing locally, use req.protocol.
+        const protocol = process.env.NODE_ENV === 'production' ? 'https' : req.protocol;
+        const fileUrl = `${protocol}://${req.get('host')}/uploads/${folderName}/${file.filename}`;
+        // update provider with new logo url and delete old if needed
+        const existingProvider = await prisma.provider.findUnique({ where: { id: providerId }, select: { companyLogoUrl: true } });
+        const updatedProvider = await prisma.provider.update({ where: { id: providerId }, data: { companyLogoUrl: fileUrl } });
+        // delete old file if it was local and different
+        try {
+            if (existingProvider?.companyLogoUrl && existingProvider.companyLogoUrl !== fileUrl && existingProvider.companyLogoUrl.includes('/uploads/')) {
+                const uploadsRoot = path_1.default.resolve(__dirname, "../../../../uploads");
+                const idx = existingProvider.companyLogoUrl.indexOf('/uploads/');
+                const relPath = existingProvider.companyLogoUrl.substring(idx + '/uploads/'.length);
+                const filePath = path_1.default.join(uploadsRoot, relPath.replace(/\//g, path_1.default.sep));
+                if (fs_1.default.existsSync(filePath)) {
+                    fs_1.default.unlinkSync(filePath);
+                }
+            }
+        }
+        catch (delErr) {
+            console.error('Failed to delete previous logo after upload:', delErr);
+        }
+        return res.status(200).json({ url: fileUrl, provider: { id: updatedProvider.id, companyLogoUrl: updatedProvider.companyLogoUrl } });
+    }
+    catch (error) {
+        console.error('uploadProviderLogo error', error);
+        return res.status(500).json({ message: 'Internal server error' });
+    }
+};
+exports.uploadProviderLogo = uploadProviderLogo;
 const createSmsIntegrationSettings = async (req, res) => {
     const { sendWhenBillIsMade, sendWhenBillIsDue, sendWhenPaymentIsMade, sendWhenCustomerAdded, sendDaysBeforeDue, sendWhenBillIsMadeTemplate, sendWhenBillIsDueTemplate, sendWhenPaymentIsMadeTemplate, sendWhenCustomerAddedTemplate, sendDaysBeforeDueTemplate } = req.body;
     const { providerId } = req.user;

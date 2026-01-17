@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 process.env.TZ = 'Asia/Manila';
 const express_1 = __importDefault(require("express"));
+const path_1 = __importDefault(require("path"));
 const cors_1 = __importDefault(require("cors"));
 const clientRoutes_1 = __importDefault(require("./modules/clients/routes/clientRoutes"));
 const providerRoutes_1 = __importDefault(require("./modules/providers/routes/providerRoutes"));
@@ -35,7 +36,12 @@ const client_1 = require("@prisma/client");
 const sendSmsWhenTheBillIsDue_1 = require("./jobs/sendSmsWhenTheBillIsDue");
 const prisma = new client_1.PrismaClient();
 const app = (0, express_1.default)();
+const trustProxySetting = process.env.TRUST_PROXY ??
+    (process.env.NODE_ENV === "production" ? 1 : false);
+app.set("trust proxy", trustProxySetting);
 const PORT = process.env.PORT || 5000;
+const UPLOAD_DIR = path_1.default.resolve(__dirname, "../uploads");
+app.use("/uploads", express_1.default.static(UPLOAD_DIR));
 (async () => {
     try {
         const jobs = await prisma.cronJob.findMany({
@@ -65,7 +71,6 @@ app.use((0, cors_1.default)({
 app.use(express_1.default.json());
 app.use((0, cookie_parser_1.default)());
 app.use(express_1.default.urlencoded({ extended: true }));
-app.use("/uploads", express_1.default.static("uploads"));
 app.use('/api/clients', clientRoutes_1.default);
 app.use('/api/providers', providerRoutes_1.default);
 app.use('/api/users', userRoutes_1.default);

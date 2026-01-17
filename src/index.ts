@@ -1,6 +1,8 @@
 process.env.TZ = 'Asia/Manila';
 
 import express, { Request, Response } from 'express';
+import path from 'path';
+import fs from 'fs';
 import cors from 'cors';
 import clientRoutes from './modules/clients/routes/clientRoutes';
 import providerRoutes from './modules/providers/routes/providerRoutes';
@@ -33,7 +35,18 @@ import { sendSmsWhenTheBillIsDue } from './jobs/sendSmsWhenTheBillIsDue';
 const prisma = new PrismaClient();
 
 const app = express();
+
+const trustProxySetting =
+  process.env.TRUST_PROXY ??
+  (process.env.NODE_ENV === "production" ? 1 : false);
+
+app.set("trust proxy", trustProxySetting);
+
 const PORT = process.env.PORT || 5000;
+
+const UPLOAD_DIR = path.resolve(__dirname, "../uploads");
+
+app.use("/uploads", express.static(UPLOAD_DIR));
 
 
 (async () => {
@@ -41,11 +54,11 @@ const PORT = process.env.PORT || 5000;
     const jobs = await prisma.cronJob.findMany({
       where: { isActive: true },
     });
-
+    
     for (const job of jobs) {
       await registerTenantJobs(job.providerId, job.providerName);
     }
-
+    
     console.log(`✅ Restored ${jobs.length} background jobs.`);
   } catch (error) {
     console.error("❌ Failed to restore jobs:", error);
@@ -68,7 +81,6 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
-app.use("/uploads", express.static("uploads"));
 app.use('/api/clients', clientRoutes);
 app.use('/api/providers', providerRoutes);
 app.use('/api/users', userRoutes)

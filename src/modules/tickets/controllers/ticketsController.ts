@@ -415,7 +415,9 @@ export const createTicketComment = async (req: Request, res: Response) => {
             }
         })
         const folderName = provider?.companyName.trim().replace(/\s+/g, "_");
-        const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${folderName}/${req.file.filename}`;
+        // Force https in production so returned URLs are secure
+        const protocol = process.env.NODE_ENV === 'production' ? 'https' : req.protocol;
+        const fileUrl = `${protocol}://${req.get("host")}/uploads/${folderName}/${req.file.filename}`;
         message += `\n\n![${req.file.originalname}](${fileUrl})`;
       }
 
