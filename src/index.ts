@@ -29,7 +29,7 @@ import { registerTenantJobs } from "./jobs/jobManager";
 import cron from 'node-cron'
 import { checkOverdueInvoices } from './jobs/checkOverdueInvoices';
 import { scheduleDailyBackups } from './jobs/dailyBackups';
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from '@prisma/client';
 import { sendSmsWhenTheBillIsDue } from './jobs/sendSmsWhenTheBillIsDue';
 
 const prisma = new PrismaClient();
@@ -101,6 +101,10 @@ app.use('/api/admin', adminRoutes)
 app.use("/api/upload-image", uploadImageRoute)
 app.use("/api/settings", settingsRoute)
 app.use("/api/network-hierarchy", hierarchyRoute)
+
+app.get('/health', (req: Request, res: Response) => {
+    res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+})
 
 cron.schedule('0 0 * * *', async () => {
   console.log("Running test cron job:", new Date().toLocaleString());
