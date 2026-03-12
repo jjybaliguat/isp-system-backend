@@ -241,7 +241,7 @@ export const xenditWebhook = async (req: Request, res: Response) => {
 
   // Defensive: ensure req.body is an object
   if (!req.body || typeof req.body !== 'object') {
-    return res.status(400).json({ message: "Missing or invalid request body" });
+    return res.status(200).send();
   }
 
   // Extract fields with fallback to undefined
@@ -254,19 +254,19 @@ export const xenditWebhook = async (req: Request, res: Response) => {
 
   // Validate required fields for all webhook events
   if (!xenditInvoiceId || typeof xenditInvoiceId !== 'string') {
-    return res.status(400).json({ message: "Missing or invalid 'id' in webhook payload" });
+    return res.status(200).send()
   }
   if (!status || typeof status !== 'string') {
-    return res.status(400).json({ message: "Missing or invalid 'status' in webhook payload" });
+    return res.status(200).send()
   }
 
   // For PAID status, require additional fields
   if (status === 'PAID') {
     if (!paid_at || typeof paid_at !== 'string') {
-      return res.status(400).json({ message: "Missing or invalid 'paid_at' for PAID status" });
+      return res.status(200).send()
     }
     if (!payment_channel || typeof payment_channel !== 'string') {
-      return res.status(400).json({ message: "Missing or invalid 'payment_channel' for PAID status" });
+      return res.status(200).send()
     }
   }
 
@@ -330,7 +330,7 @@ export const xenditWebhook = async (req: Request, res: Response) => {
         }
       } catch (err) {
         console.error('Failed to forward webhook to legacy endpoint', err);
-        return res.status(502).json({ message: 'Payment not found locally; failed to forward to legacy webhook' });
+        return res.status(200).send();
       }
     }
 
@@ -379,7 +379,7 @@ export const xenditWebhook = async (req: Request, res: Response) => {
       }
 
       case "PAID":
-        break; // continue to paid flow
+        break; 
 
       default:
         return res.status(200).json({
@@ -497,6 +497,6 @@ export const xenditWebhook = async (req: Request, res: Response) => {
     return res.status(200).json({ message: "Payment processed" });
   } catch (error) {
     console.error("Xendit webhook error:", error);
-    return res.status(500).json({ message: "Internal server error" });
+    return res.status(200).json({ message: "Internal server error" });
   }
 };
