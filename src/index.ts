@@ -116,7 +116,6 @@ cron.schedule('0 0 * * *', async () => {
   }
 }, { timezone: "Asia/Manila" });
 
-// Schedule daily provider backups (providers with dailyBackup=true)
 scheduleDailyBackups();
 
 
