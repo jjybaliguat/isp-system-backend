@@ -91,6 +91,9 @@ app.use('/api/admin', adminRoutes_1.default);
 app.use("/api/upload-image", uploadImageRoute_1.default);
 app.use("/api/settings", settingsRoute_1.default);
 app.use("/api/network-hierarchy", network_hierarchy_route_1.default);
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+});
 node_cron_1.default.schedule('0 0 * * *', async () => {
     console.log("Running test cron job:", new Date().toLocaleString());
     try {
@@ -101,7 +104,6 @@ node_cron_1.default.schedule('0 0 * * *', async () => {
         console.error("Error in daily cron job:", error);
     }
 }, { timezone: "Asia/Manila" });
-// Schedule daily provider backups (providers with dailyBackup=true)
 (0, dailyBackups_1.scheduleDailyBackups)();
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);

@@ -9,6 +9,7 @@ export declare const getBillingById: (req: Request, res: Response) => Promise<Re
 export declare const getFullYearBillingById: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const deleteBilling: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const confirmPayment: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const sendPaymentConfirmationEmail: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const sendEmailReminder: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const sendSmsReminder: (req: Request, res: Response) => Promise<Response<any, Record<string, any>> | undefined>;
 export declare const generateBillingForAllAccounts: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;

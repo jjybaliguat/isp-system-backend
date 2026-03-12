@@ -11,6 +11,7 @@ router.patch('/v2/:id', authMiddleware_1.authenticateProvider, billingController
 router.post('/:id/confirm-payment', authMiddleware_1.authenticateProvider, billingController_1.confirmPayment);
 router.post('/send-email-reminder/:id', authMiddleware_1.authenticateProvider, billingController_1.sendEmailReminder);
 router.post('/send-sms-reminder/:id', authMiddleware_1.authenticateProvider, billingController_1.sendSmsReminder);
+router.post('/send-payment-confirmation-email/:id', authMiddleware_1.authenticateProvider, billingController_1.sendPaymentConfirmationEmail);
 router.get('/', authMiddleware_1.authenticateProvider, billingController_1.getBillings);
 router.get('/get-fullyear-billing/:id', authMiddleware_1.authenticateProvider, billingController_1.getFullYearBillingById);
 router.get('/get-bills/:accountNumber', billingController_1.getBillingByAccountNumber);

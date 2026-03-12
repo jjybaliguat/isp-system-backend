@@ -109,6 +109,49 @@ export const getPayments = async(req: Request, res: Response) => {
   }
 }
 
+export const getPayment = async(req: Request, res: Response) => {
+  const { id } = req.params as { id: string };
+  try {
+    const payment = await prisma.payment.findUnique({
+      where: { id },
+      include: {
+        client: {
+          select: {
+            id: true,
+            fullName: true,
+            accountNumber: true,
+            address: true,
+            email: true,
+            phoneNumber: true,
+            provider: {
+              select: {
+                id: true,
+                companyName: true,
+                companyAddress: true,
+                companyLogoUrl: true,
+              }
+            }
+          },
+        },
+        billing: {
+          select: {
+            invoiceNumber: true,
+            amount: true,
+            dueDate: true
+          }
+        }
+      }
+    });
+    if (!payment) {
+      return res.status(404).json({ message: "Payment not found" });
+    }
+    return res.status(200).json(payment);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+}
+
 export const createPayment = async (req: Request, res: Response) => {
   const { billingId } = req.params as { billingId: string };
 
