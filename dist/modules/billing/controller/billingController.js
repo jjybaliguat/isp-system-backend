@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateBillingForAllAccounts = exports.sendSmsReminder = exports.sendEmailReminder = exports.confirmPayment = exports.deleteBilling = exports.getFullYearBillingById = exports.getBillingById = exports.getUnpaidBillingById = exports.getBillings = exports.getBillingByAccountNumber = exports.updateBillingForAccount = exports.createBillingForAccount = exports.createBilling = void 0;
+exports.generateBillingForAllAccounts = exports.sendSmsReminder = exports.sendEmailReminder = exports.sendPaymentConfirmationEmail = exports.confirmPayment = exports.deleteBilling = exports.getFullYearBillingById = exports.getBillingById = exports.getUnpaidBillingById = exports.getBillings = exports.getBillingByAccountNumber = exports.updateBillingForAccount = exports.createBillingForAccount = exports.createBilling = void 0;
 const ua_parser_js_1 = require("ua-parser-js");
 const date_fns_1 = require("date-fns");
 const client_1 = require("@prisma/client");
@@ -9,6 +9,7 @@ const sendInvoiceReminderEmail_1 = require("../../../jobs/sendInvoiceReminderEma
 const hasher_1 = require("../../../utils/hasher");
 const sendPaymentConfirmation_1 = require("../../../jobs/sendPaymentConfirmation");
 const sendSms_1 = require("../../../jobs/sendSms");
+const emailIsConfirgured_1 = require("../../../helpers/emailIsConfirgured");
 const prisma = new client_1.PrismaClient();
 const createBilling = async (req, res) => {
     const { period, description, amount, clientId, dueDate } = req.body;
@@ -479,6 +480,7 @@ const getBillingById = async (req, res) => {
         if (!bill) {
             return res.status(404).json({ message: "Bill not found" });
         }
+        console.log(bill);
         return res.status(200).json(bill);
     }
     catch (error) {
@@ -665,28 +667,21 @@ const confirmPayment = async (req, res) => {
         })
             .catch(console.error);
         const settings = user?.provider?.settings;
-        const emailIsConfigured = settings &&
-            settings.notifications?.enabled &&
-            settings.notifications?.emailHost &&
-            settings.notifications?.emailPass &&
-            settings.notifications?.emailUser &&
-            settings.notifications?.senderName &&
-            settings.notifications?.emailPort &&
-            settings.notifications?.paymentConfirmationTemplate;
-        if (sendReceipt && emailIsConfigured) {
-            setImmediate(() => (0, sendPaymentConfirmation_1.sendPaymentConfirmation)(settings.notifications?.paymentConfirmationTemplate, {
-                emailHost: settings.notifications?.emailHost,
-                emailPass: settings.notifications?.emailPass,
-                emailUser: settings.notifications?.emailUser,
-                emailPort: settings.notifications?.emailPort,
-                senderName: settings.notifications?.senderName,
+        const IsEmailConfirgured = (0, emailIsConfirgured_1.emailIsConfigured)(settings?.notifications);
+        if (sendReceipt && IsEmailConfirgured) {
+            setImmediate(() => (0, sendPaymentConfirmation_1.sendPaymentConfirmation)(settings?.notifications?.paymentConfirmationTemplate, {
+                emailHost: settings?.notifications?.emailHost,
+                emailPass: settings?.notifications?.emailPass,
+                emailUser: settings?.notifications?.emailUser,
+                emailPort: settings?.notifications?.emailPort,
+                senderName: settings?.notifications?.senderName,
             }, bill.account?.client.email, "Payment Confirmation", {
                 clientName: bill.account?.client.fullName,
                 invoiceNumber: bill.invoiceNumber,
                 amount: bill.amount,
                 paymentDate: (0, date_fns_1.formatDate)(payDate, "MMMM-dd-yyyy"),
                 paymentMethod,
-                receiptUrl: `https://sierracommunication.net/invoice/${payment.id}`,
+                receiptUrl: `https://sierracommunication.net/payment/${payment.id}`,
             }));
         }
         // Send sms notification
@@ -722,6 +717,66 @@ const confirmPayment = async (req, res) => {
     }
 };
 exports.confirmPayment = confirmPayment;
+const sendPaymentConfirmationEmail = async (req, res) => {
+    const { id: userId, providerId } = req.user;
+    const { id } = req.params;
+    if (!(0, uuid_1.validate)(id)) {
+        return res.status(400).json({ message: "Invalid Billing ID format (UUID required)" });
+    }
+    try {
+        const [user, bill] = await Promise.all([
+            prisma.user.findUnique({
+                where: { id: userId },
+                include: {
+                    employee: true,
+                    provider: { select: { name: true, settings: true, companyName: true, smsIntegrationSettings: true, semaphoreApiKey: true } },
+                },
+            }),
+            prisma.billing.findUnique({
+                where: { id, status: "PAID" },
+                include: {
+                    client: true,
+                    account: { include: { client: true } },
+                    payments: {
+                        select: {
+                            amount: true,
+                            paymentMethod: true,
+                            paidAt: true,
+                            id: true
+                        }
+                    }
+                },
+            }),
+        ]);
+        if (!bill)
+            return res.status(404).json({ message: `Bill with id ${id} not found` });
+        const settings = user?.provider?.settings;
+        const IsEmailConfirgured = (0, emailIsConfirgured_1.emailIsConfigured)(settings?.notifications);
+        if (!IsEmailConfirgured) {
+            return res.status(400).json({ message: "Email notification settings are incomplete. Please contact your provider." });
+        }
+        setImmediate(() => (0, sendPaymentConfirmation_1.sendPaymentConfirmation)(settings?.notifications?.paymentConfirmationTemplate, {
+            emailHost: settings?.notifications?.emailHost,
+            emailPass: settings?.notifications?.emailPass,
+            emailUser: settings?.notifications?.emailUser,
+            emailPort: settings?.notifications?.emailPort,
+            senderName: settings?.notifications?.senderName,
+        }, bill.account?.client.email, "Payment Confirmation", {
+            clientName: bill.account?.client.fullName,
+            invoiceNumber: bill.invoiceNumber,
+            amount: bill.amount,
+            paymentDate: (0, date_fns_1.formatDate)(bill.paidAt, "MMMM-dd-yyyy"),
+            paymentMethod: bill.payments[0]?.paymentMethod,
+            receiptUrl: `https://sierracommunication.net/payment/${bill.payments[0]?.id}`,
+        }));
+        return res.status(200).json({ message: "Payment confirmation email sent" });
+    }
+    catch (error) {
+        console.log(error);
+        return res.status(500).json({ message: "Internal Server Error" });
+    }
+};
+exports.sendPaymentConfirmationEmail = sendPaymentConfirmationEmail;
 const sendEmailReminder = async (req, res) => {
     const { id: userId, providerId } = req.user;
     const { id } = req.params;

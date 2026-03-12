@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.xenditWebhook = exports.createPayment = exports.getPayments = void 0;
+exports.xenditWebhook = exports.createPayment = exports.getPayment = exports.getPayments = void 0;
 const xendit_node_1 = require("xendit-node");
 const hasher_1 = require("../../../utils/hasher");
 const client_1 = require("@prisma/client");
@@ -105,6 +105,50 @@ const getPayments = async (req, res) => {
     }
 };
 exports.getPayments = getPayments;
+const getPayment = async (req, res) => {
+    const { id } = req.params;
+    try {
+        const payment = await prisma.payment.findUnique({
+            where: { id },
+            include: {
+                client: {
+                    select: {
+                        id: true,
+                        fullName: true,
+                        accountNumber: true,
+                        address: true,
+                        email: true,
+                        phoneNumber: true,
+                        provider: {
+                            select: {
+                                id: true,
+                                companyName: true,
+                                companyAddress: true,
+                                companyLogoUrl: true,
+                            }
+                        }
+                    },
+                },
+                billing: {
+                    select: {
+                        invoiceNumber: true,
+                        amount: true,
+                        dueDate: true
+                    }
+                }
+            }
+        });
+        if (!payment) {
+            return res.status(404).json({ message: "Payment not found" });
+        }
+        return res.status(200).json(payment);
+    }
+    catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: "Internal Server Error" });
+    }
+};
+exports.getPayment = getPayment;
 const createPayment = async (req, res) => {
     const { billingId } = req.params;
     try {
@@ -217,7 +261,7 @@ exports.createPayment = createPayment;
 const xenditWebhook = async (req, res) => {
     // Defensive: ensure req.body is an object
     if (!req.body || typeof req.body !== 'object') {
-        return res.status(400).json({ message: "Missing or invalid request body" });
+        return res.status(200).send();
     }
     // Extract fields with fallback to undefined
     const xenditInvoiceId = req.body.id;
@@ -228,18 +272,18 @@ const xenditWebhook = async (req, res) => {
     const payment_channel = req.body.payment_channel;
     // Validate required fields for all webhook events
     if (!xenditInvoiceId || typeof xenditInvoiceId !== 'string') {
-        return res.status(400).json({ message: "Missing or invalid 'id' in webhook payload" });
+        return res.status(200).send();
     }
     if (!status || typeof status !== 'string') {
-        return res.status(400).json({ message: "Missing or invalid 'status' in webhook payload" });
+        return res.status(200).send();
     }
     // For PAID status, require additional fields
     if (status === 'PAID') {
         if (!paid_at || typeof paid_at !== 'string') {
-            return res.status(400).json({ message: "Missing or invalid 'paid_at' for PAID status" });
+            return res.status(200).send();
         }
         if (!payment_channel || typeof payment_channel !== 'string') {
-            return res.status(400).json({ message: "Missing or invalid 'payment_channel' for PAID status" });
+            return res.status(200).send();
         }
     }
     try {
@@ -304,7 +348,7 @@ const xenditWebhook = async (req, res) => {
             }
             catch (err) {
                 console.error('Failed to forward webhook to legacy endpoint', err);
-                return res.status(502).json({ message: 'Payment not found locally; failed to forward to legacy webhook' });
+                return res.status(200).send();
             }
         }
         if (payment.status !== "PENDING") {
@@ -345,7 +389,7 @@ const xenditWebhook = async (req, res) => {
                 return res.status(200).json({ message: "Payment cancelled" });
             }
             case "PAID":
-                break; // continue to paid flow
+                break;
             default:
                 return res.status(200).json({
                     message: "Ignored status",
@@ -438,7 +482,7 @@ const xenditWebhook = async (req, res) => {
     }
     catch (error) {
         console.error("Xendit webhook error:", error);
-        return res.status(500).json({ message: "Internal server error" });
+        return res.status(200).json({ message: "Internal server error" });
     }
 };
 exports.xenditWebhook = xenditWebhook;
