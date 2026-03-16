@@ -24,6 +24,7 @@ import adminRoutes from './modules/admin/routes/adminRoutes'
 import uploadImageRoute from './modules/upload-image/uploadImageRoute' 
 import settingsRoute from './modules/settings/settingsRoute' 
 import hierarchyRoute from './modules/network-hierarchy/network-hierarchy-route' 
+import mikrotikRoute from './modules/mikrotik/mikrotikRoutes' 
 import cookieParser from "cookie-parser";
 import { registerTenantJobs } from "./jobs/jobManager";
 import cron from 'node-cron'
@@ -31,6 +32,7 @@ import { checkOverdueInvoices } from './jobs/checkOverdueInvoices';
 import { scheduleDailyBackups } from './jobs/dailyBackups';
 import { PrismaClient } from '@prisma/client';
 import { sendSmsWhenTheBillIsDue } from './jobs/sendSmsWhenTheBillIsDue';
+import { collectPPPoESessionsBandwidth } from './jobs/collectMikrotikPPPoE';
 
 const prisma = new PrismaClient();
 
@@ -101,6 +103,7 @@ app.use('/api/admin', adminRoutes)
 app.use("/api/upload-image", uploadImageRoute)
 app.use("/api/settings", settingsRoute)
 app.use("/api/network-hierarchy", hierarchyRoute)
+app.use("/api/mikrotik", mikrotikRoute)
 
 app.get('/health', (req: Request, res: Response) => {
     res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
@@ -117,6 +120,7 @@ cron.schedule('0 0 * * *', async () => {
 }, { timezone: "Asia/Manila" });
 
 scheduleDailyBackups();
+collectPPPoESessionsBandwidth();
 
 
 app.listen(PORT, () => {
