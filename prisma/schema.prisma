@@ -14,9 +14,9 @@ model User {
   password   String
   fullName   String?
   employeeId String? @db.Uuid @unique
-  employee   Employees? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employee   Employees? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
   clientId   String? @db.Uuid @unique
-  client     Client? @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client     Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
   provider   Provider  @relation(fields: [providerId], references: [id], onDelete: Cascade)
   providerId String    @db.Uuid
   role       UserRole    @default(USER)
@@ -732,5 +732,16 @@ model Message {
 
   // For indexing messages by conversation
   @@index([conversationId, createdAt])
+}
+
+model PppoeBandwidth {
+  id          Int      @id @default(autoincrement())
+  username    String
+  rx_mbps     Float
+  tx_mbps     Float
+  recordedAt  DateTime @default(now()) @map("recorded_at")
+
+  @@index([username, recordedAt], name: "idx_pppoe_user_time")
+  @@map("pppoe_bandwidth")
 }
 

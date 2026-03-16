@@ -27,6 +27,7 @@ const adminRoutes_1 = __importDefault(require("./modules/admin/routes/adminRoute
 const uploadImageRoute_1 = __importDefault(require("./modules/upload-image/uploadImageRoute"));
 const settingsRoute_1 = __importDefault(require("./modules/settings/settingsRoute"));
 const network_hierarchy_route_1 = __importDefault(require("./modules/network-hierarchy/network-hierarchy-route"));
+const mikrotikRoutes_1 = __importDefault(require("./modules/mikrotik/mikrotikRoutes"));
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const jobManager_1 = require("./jobs/jobManager");
 const node_cron_1 = __importDefault(require("node-cron"));
@@ -34,6 +35,7 @@ const checkOverdueInvoices_1 = require("./jobs/checkOverdueInvoices");
 const dailyBackups_1 = require("./jobs/dailyBackups");
 const client_1 = require("@prisma/client");
 const sendSmsWhenTheBillIsDue_1 = require("./jobs/sendSmsWhenTheBillIsDue");
+const collectMikrotikPPPoE_1 = require("./jobs/collectMikrotikPPPoE");
 const prisma = new client_1.PrismaClient();
 const app = (0, express_1.default)();
 const trustProxySetting = process.env.TRUST_PROXY ??
@@ -91,6 +93,7 @@ app.use('/api/admin', adminRoutes_1.default);
 app.use("/api/upload-image", uploadImageRoute_1.default);
 app.use("/api/settings", settingsRoute_1.default);
 app.use("/api/network-hierarchy", network_hierarchy_route_1.default);
+app.use("/api/mikrotik", mikrotikRoutes_1.default);
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
 });
@@ -105,6 +108,7 @@ node_cron_1.default.schedule('0 0 * * *', async () => {
     }
 }, { timezone: "Asia/Manila" });
 (0, dailyBackups_1.scheduleDailyBackups)();
+(0, collectMikrotikPPPoE_1.collectPPPoESessionsBandwidth)();
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
