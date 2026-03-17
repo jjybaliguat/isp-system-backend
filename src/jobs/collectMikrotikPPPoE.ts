@@ -72,19 +72,36 @@ async function saveBandwidthBatch() {
   if (bandwidthBuffer.length === 0) return;
 
   const dataToSave = bandwidthBuffer;
-  bandwidthBuffer = [];
+  bandwidthBuffer = []; // clear buffer
 
   try {
+    // Save historical records
     await prisma.pppoeBandwidth.createMany({
       data: dataToSave,
       skipDuplicates: true,
     });
 
-    console.log(`Saved ${dataToSave.length} bandwidth records`);
+    console.log(`Saved ${dataToSave.length} bandwidth records to pppoeBandwidth`);
+
+    await prisma.$transaction(
+      dataToSave.map(record =>
+        prisma.pppoeLatest.upsert({
+          where: { username: record.username },
+          update: {
+            rx_mbps: record.rx_mbps,
+            tx_mbps: record.tx_mbps,
+            recordedAt: record.recordedAt,
+          },
+          create: record,
+        })
+      )
+    );
+
+    console.log(`Updated ${dataToSave.length} records in pppoeLatest`);
   } catch (err: any) {
     console.error("Batch save failed:", err.message);
 
-    // return records to buffer if failed
+    // Return records to buffer if failed
     bandwidthBuffer.push(...dataToSave);
   }
 }

@@ -1,11 +1,11 @@
 import { Request, Response } from "express";
 import prisma from "../../utils/prisma";
 
-export const getActivePPPoEAccounts = async (
+export const getLatestActivePPPoEAccounts = async (
   req: Request,
   res: Response
 ) => {
-  const {id, providerId} = req.user
+  const { providerId } = req.user;
   const page = Number(req.query.page) || 1;
   const limit = Number(req.query.limit) || 10;
   const search =
@@ -14,75 +14,51 @@ export const getActivePPPoEAccounts = async (
   const offset = (page - 1) * limit;
 
   try {
+    // Verify provider access
     const provider = await prisma.provider.findUnique({
-      where: {
-        id: providerId,
-        providerType: "MAIN",
-        companyName: {
-          contains: "Sierra",
-          mode: "insensitive"
-        }
-      }
-    })
-
-    if(!provider) return res.status(400).json({message: "You do not have access to this edpoint"})
-
-    // Get latest bandwidth per user with pagination
-    const where = search
-    ? {
-        username: {
-            contains: search,
-            mode: "insensitive" as const,
-        },
-        }
-    : {};
-
-    const [usernames, total] = await Promise.all([
-        prisma.pppoeBandwidth.findMany({
-            where,
-            distinct: ["username"],
-            select: { username: true },
-            skip: offset,
-            take: limit,
-        }),
-        prisma.pppoeBandwidth.groupBy({
-            by: ["username"],
-            where,
-        }),
-    ]);
-
-        const latestRecords = await prisma.pppoeBandwidth.findMany({
-        where: {
-            username: {
-            in: usernames.map((u) => u.username),
-            },
-        },
-        orderBy: [
-            { username: "asc" },
-            { recordedAt: "desc" },
-        ],
-        distinct: ["username"],
+      where: { id: providerId },
+      // Optional: adjust filters if you need providerType / companyName checks
     });
 
-    const data = latestRecords;
+    if (!provider)
+      return res
+        .status(400)
+        .json({ message: "You do not have access to this endpoint" });
 
-    const totalCount = total.length;
+    // Build search filter
+    const where = search
+      ? {
+          username: {
+            contains: search,
+            mode: "insensitive" as const,
+          },
+        }
+      : {};
+
+    // Get total count
+    const totalCount = await prisma.pppoeLatest.count({ where });
+
+    // Get paginated latest records
+    const latestRecords = await prisma.pppoeLatest.findMany({
+      where,
+      orderBy: { username: "asc" },
+      skip: offset,
+      take: limit,
+    });
 
     const totalPages = Math.ceil(totalCount / limit);
 
-    const response = {
-      data,
+    return res.status(200).json({
+      data: latestRecords,
       pagination: {
         page,
         limit,
         total: totalCount,
         totalPages,
       },
-    };
-
-    return res.status(200).json(response);
+    });
   } catch (error) {
-    console.error(error);
+    console.error("Error fetching latest PPPoE accounts:", error);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };

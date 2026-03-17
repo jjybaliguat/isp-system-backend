@@ -120,7 +120,7 @@ cron.schedule('0 0 * * *', async () => {
 }, { timezone: "Asia/Manila" });
 
 scheduleDailyBackups();
-// startPPPBandwidthCollector().catch(err => console.error("Collector error:", err));
+startPPPBandwidthCollector().catch(err => console.error("Collector error:", err));
 
 
 app.listen(PORT, () => {
