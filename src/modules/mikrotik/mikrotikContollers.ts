@@ -65,39 +65,51 @@ export const getLatestActivePPPoEAccounts = async (
 
 export const getPPPoEHistory = async (req: Request, res: Response) => {
   try {
-    const username = req.query.username as string
-    
-    if (!username) {
-      return res.status(400).json({ message: "username is required" })
-    }
-    
-    const from = req.query.from
-    ? new Date(req.query.from as string)
-    : new Date(Date.now() - 5 * 60 * 1000)
-    
-    const to = req.query.to
-    ? new Date(req.query.to as string)
-    : new Date()
-    
-    const data = await prisma.pppoeBandwidth.findMany({
-      where: {
-        username,
-        recordedAt: {
-          gte: from,
-          lte: to
-        }
-      },
-      orderBy: {
-        recordedAt: "asc"
-      }
-    })
+    const username = req.query.username as string;
 
-    return res.json(data)
+    if (!username) {
+      return res.status(400).json({ message: "username is required" });
+    }
+
+    const from = req.query.from
+      ? new Date(req.query.from as string)
+      : new Date(Date.now() - 5 * 60 * 1000);
+
+    const to = req.query.to
+      ? new Date(req.query.to as string)
+      : new Date();
+
+    const intervalSec = Number(req.query.interval) || 2;
+
+    // 🔥 Use generate_series for gap filling
+    const data = await prisma.$queryRawUnsafe(`
+      SELECT 
+        gs AS "recordedAt",
+        COALESCE(b.rx_mbps, 0) AS "rx_mbps",
+        COALESCE(b.tx_mbps, 0) AS "tx_mbps"
+      FROM generate_series(
+        '${from.toISOString()}'::timestamp,
+        '${to.toISOString()}'::timestamp,
+        interval '${intervalSec} seconds'
+      ) AS gs
+      LEFT JOIN LATERAL (
+        SELECT rx_mbps, tx_mbps
+        FROM "pppoe_bandwidth" b
+        WHERE b.username = '${username}'
+          AND b."recorded_at" >= gs
+          AND b."recorded_at" < gs + interval '${intervalSec} seconds'
+        ORDER BY b."recorded_at" ASC
+        LIMIT 1
+      ) b ON true
+      ORDER BY gs ASC
+    `);
+
+    return res.json(data);
 
   } catch (error) {
-    console.error(error)
+    console.error(error);
     return res.status(500).json({
-      message: "Internal server error"
-    })
+      message: "Internal server error",
+    });
   }
-}
+};
