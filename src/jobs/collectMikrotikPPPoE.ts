@@ -19,7 +19,7 @@ const previousCounters = new Map<string, PreviousCounter>();
 // buffer for 3 second batch
 let bandwidthBuffer: Bandwidth[] = [];
 
-export async function collectPPPoESessionsBandwidth(): Promise<void> {
+async function collectPPPoESessionsBandwidth(): Promise<void> {
   const conn = await getMikrotikConnection();
   if (!conn) return;
 
@@ -113,8 +113,23 @@ async function cleanupOldRecords() {
 
 cron.schedule("0 * * * *", cleanupOldRecords);
 
-// collect every second
-setInterval(collectPPPoESessionsBandwidth, 1000);
+export async function startPPPBandwidthCollector() {
+  let lastSave = Date.now();
+  const saveInterval = 3000; // 3 seconds
 
-// save every 3 seconds
-setInterval(saveBandwidthBatch, 3000);
+  while (true) {
+    const startTime = Date.now();
+    // collect bandwidth
+    await collectPPPoESessionsBandwidth();
+
+    // check if it's time to save batch
+    if (Date.now() - lastSave >= saveInterval) {
+      await saveBandwidthBatch();
+      lastSave = Date.now();
+    }
+
+    // sleep 1 second minus collection time to maintain 1-sec interval
+    const elapsed = Date.now() - startTime;
+    await new Promise(res => setTimeout(res, Math.max(0, 1000 - elapsed)));
+  }
+}

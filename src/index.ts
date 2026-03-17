@@ -32,7 +32,7 @@ import { checkOverdueInvoices } from './jobs/checkOverdueInvoices';
 import { scheduleDailyBackups } from './jobs/dailyBackups';
 import { PrismaClient } from '@prisma/client';
 import { sendSmsWhenTheBillIsDue } from './jobs/sendSmsWhenTheBillIsDue';
-import { collectPPPoESessionsBandwidth } from './jobs/collectMikrotikPPPoE';
+import { startPPPBandwidthCollector } from './jobs/collectMikrotikPPPoE';
 
 const prisma = new PrismaClient();
 
@@ -120,7 +120,7 @@ cron.schedule('0 0 * * *', async () => {
 }, { timezone: "Asia/Manila" });
 
 scheduleDailyBackups();
-collectPPPoESessionsBandwidth();
+startPPPBandwidthCollector().catch(err => console.error("Collector error:", err));
 
 
 app.listen(PORT, () => {
