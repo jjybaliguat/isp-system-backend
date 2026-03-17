@@ -81,4 +81,11 @@ async function cleanupOldRecords() {
 cron.schedule('0 * * * *', cleanupOldRecords);
 // cron.schedule('* * * * *', cleanupOldRecords);
 // Run every second
-setInterval(collectPPPoESessionsBandwidth, 1000);
+async function loop() {
+  while (true) {
+    await collectPPPoESessionsBandwidth()
+    await new Promise(r => setTimeout(r, 1000))
+  }
+}
+
+loop()
