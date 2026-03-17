@@ -1,4 +1,7 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateBillingForAllAccounts = exports.sendSmsReminder = exports.sendEmailReminder = exports.sendPaymentConfirmationEmail = exports.confirmPayment = exports.deleteBilling = exports.getFullYearBillingById = exports.getBillingById = exports.getUnpaidBillingById = exports.getBillings = exports.getBillingByAccountNumber = exports.updateBillingForAccount = exports.createBillingForAccount = exports.createBilling = void 0;
 const ua_parser_js_1 = require("ua-parser-js");
@@ -10,7 +13,7 @@ const hasher_1 = require("../../../utils/hasher");
 const sendPaymentConfirmation_1 = require("../../../jobs/sendPaymentConfirmation");
 const sendSms_1 = require("../../../jobs/sendSms");
 const emailIsConfirgured_1 = require("../../../helpers/emailIsConfirgured");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../../../utils/prisma"));
 const createBilling = async (req, res) => {
     const { period, description, amount, clientId, dueDate } = req.body;
     const { providerId } = req.user;
@@ -22,7 +25,7 @@ const createBilling = async (req, res) => {
         if (!period) {
             res.status(400).json({ message: "Bill Period is required" });
         }
-        const client = await prisma.client.findUnique({
+        const client = await prisma_1.default.client.findUnique({
             where: { id: clientId },
             include: {
                 servicePlan: true
@@ -31,7 +34,7 @@ const createBilling = async (req, res) => {
         if (!client) {
             return res.status(404).json({ message: 'Client not found' });
         }
-        const provider = await prisma.provider.findUnique({
+        const provider = await prisma_1.default.provider.findUnique({
             where: { id: providerId },
             select: { settings: true },
         });
@@ -43,7 +46,7 @@ const createBilling = async (req, res) => {
         if (!description) {
             defaultDescription = `Bill-Period-${period}-Acc-${client.accountNumber}`;
         }
-        const account = await prisma.accounts.findFirst({
+        const account = await prisma_1.default.accounts.findFirst({
             where: {
                 clientId
             },
@@ -51,7 +54,7 @@ const createBilling = async (req, res) => {
                 id: true
             }
         });
-        const billing = await prisma.billing.create({
+        const billing = await prisma_1.default.billing.create({
             data: {
                 invoiceNumber: invoiceNumber || `${Date.now().toString().slice(-10)}`,
                 clientId,
@@ -81,7 +84,7 @@ const createBillingForAccount = async (req, res) => {
         if (!period) {
             return res.status(400).json({ message: "Bill Period is required" });
         }
-        const account = await prisma.accounts.findUnique({
+        const account = await prisma_1.default.accounts.findUnique({
             where: { id: accountId },
             include: {
                 servicePlan: true,
@@ -91,7 +94,7 @@ const createBillingForAccount = async (req, res) => {
             return res.status(404).json({ message: "Account not found" });
         }
         // Fetch provider settings
-        const provider = await prisma.provider.findUnique({
+        const provider = await prisma_1.default.provider.findUnique({
             where: { id: providerId },
             select: {
                 companyName: true,
@@ -124,7 +127,7 @@ const createBillingForAccount = async (req, res) => {
         // // Final amount = base amount – total discount
         // const finalAmount = amount? amount : Math.max(baseAmount - totalDiscount, 0);
         // Create billing with nested discount create
-        const billing = await prisma.billing.create({
+        const billing = await prisma_1.default.billing.create({
             data: {
                 invoiceNumber,
                 clientId: account.clientId,
@@ -157,7 +160,7 @@ const createBillingForAccount = async (req, res) => {
             },
         });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "CREATE",
@@ -208,7 +211,7 @@ const updateBillingForAccount = async (req, res) => {
     }
     try {
         const billDuedate = dueDate ? new Date(dueDate) : null;
-        const result = await prisma.$transaction(async (tx) => {
+        const result = await prisma_1.default.$transaction(async (tx) => {
             // 1️⃣ Update the billing info
             await tx.billing.update({
                 where: {
@@ -276,7 +279,7 @@ exports.updateBillingForAccount = updateBillingForAccount;
 const getBillingByAccountNumber = async (req, res) => {
     const { accountNumber } = req.params;
     try {
-        const client = await prisma.client.findUnique({
+        const client = await prisma_1.default.client.findUnique({
             where: {
                 accountNumber
             }
@@ -284,7 +287,7 @@ const getBillingByAccountNumber = async (req, res) => {
         if (!client) {
             res.status(404).json({ message: "Client not found" });
         }
-        const bill = await prisma.billing.findMany({
+        const bill = await prisma_1.default.billing.findMany({
             where: {
                 client: {
                     accountNumber: accountNumber,
@@ -360,7 +363,7 @@ const getBillings = async (req, res) => {
         }
         // Query + count in parallel
         const [bills, total] = await Promise.all([
-            prisma.billing.findMany({
+            prisma_1.default.billing.findMany({
                 where: whereClause,
                 include: {
                     discounts: true,
@@ -409,7 +412,7 @@ const getBillings = async (req, res) => {
                 skip,
                 take: limit,
             }),
-            prisma.billing.count({ where: whereClause }),
+            prisma_1.default.billing.count({ where: whereClause }),
         ]);
         return res.status(200).json({
             data: bills,
@@ -430,7 +433,7 @@ exports.getBillings = getBillings;
 const getUnpaidBillingById = async (req, res) => {
     const { id } = req.params;
     try {
-        const bill = await prisma.billing.findUnique({
+        const bill = await prisma_1.default.billing.findUnique({
             where: {
                 id,
                 status: {
@@ -462,7 +465,7 @@ exports.getUnpaidBillingById = getUnpaidBillingById;
 const getBillingById = async (req, res) => {
     const { id } = req.params;
     try {
-        const bill = await prisma.billing.findUnique({
+        const bill = await prisma_1.default.billing.findUnique({
             where: {
                 id
             },
@@ -496,12 +499,12 @@ const getFullYearBillingById = async (req, res) => {
         return res.status(400).json({ message: "Invalid client ID format (UUID required)" });
     }
     try {
-        const accounts = await prisma.accounts.findMany({
+        const accounts = await prisma_1.default.accounts.findMany({
             where: { clientId: id },
             select: { id: true },
         });
         const accountIds = accounts.map(a => a.id);
-        const billings = await prisma.billing.findMany({
+        const billings = await prisma_1.default.billing.findMany({
             where: {
                 accountId: { in: accountIds },
                 dueDate: {
@@ -530,7 +533,7 @@ const deleteBilling = async (req, res) => {
     if (!id)
         return res.status(400).json({ message: "Missing required id field" });
     try {
-        const user = await prisma.user.findUnique({
+        const user = await prisma_1.default.user.findUnique({
             where: {
                 id: userId
             },
@@ -543,12 +546,12 @@ const deleteBilling = async (req, res) => {
                 }
             }
         });
-        const bill = await prisma.billing.findUnique({
+        const bill = await prisma_1.default.billing.findUnique({
             where: {
                 id
             }
         });
-        await prisma.billing.delete({
+        await prisma_1.default.billing.delete({
             where: {
                 id,
                 client: {
@@ -557,7 +560,7 @@ const deleteBilling = async (req, res) => {
             }
         });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "DELETE",
@@ -594,14 +597,14 @@ const confirmPayment = async (req, res) => {
     try {
         // Pull user + bill in parallel
         const [user, bill] = await Promise.all([
-            prisma.user.findUnique({
+            prisma_1.default.user.findUnique({
                 where: { id: userId },
                 include: {
                     employee: true,
                     provider: { select: { name: true, settings: true, companyName: true, smsIntegrationSettings: true, semaphoreApiKey: true } },
                 },
             }),
-            prisma.billing.findUnique({
+            prisma_1.default.billing.findUnique({
                 where: { id },
                 include: {
                     client: true,
@@ -612,7 +615,7 @@ const confirmPayment = async (req, res) => {
         if (!bill)
             return res.status(404).json({ message: `Bill with id ${id} not found` });
         // Check reference number
-        const isPaymentExists = await prisma.payment.findFirst({
+        const isPaymentExists = await prisma_1.default.payment.findFirst({
             where: {
                 referenceId: referenceNumber,
                 client: { providerId },
@@ -621,7 +624,7 @@ const confirmPayment = async (req, res) => {
         if (isPaymentExists)
             return res.status(400).json({ message: "Reference number already exists" });
         // ---- CREATE PAYMENT ----
-        const payment = await prisma.payment.create({
+        const payment = await prisma_1.default.payment.create({
             data: {
                 billingId: id,
                 clientId: bill.clientId,
@@ -642,7 +645,7 @@ const confirmPayment = async (req, res) => {
             : amount + bill.paidAmount < bill.amount
                 ? "PARTIALLY_PAID"
                 : "PAID";
-        const updatedBill = await prisma.billing.update({
+        const updatedBill = await prisma_1.default.billing.update({
             where: { id },
             data: {
                 status: newStatus,
@@ -655,7 +658,7 @@ const confirmPayment = async (req, res) => {
             }
         });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "Confirm Payment",
@@ -725,14 +728,14 @@ const sendPaymentConfirmationEmail = async (req, res) => {
     }
     try {
         const [user, bill] = await Promise.all([
-            prisma.user.findUnique({
+            prisma_1.default.user.findUnique({
                 where: { id: userId },
                 include: {
                     employee: true,
                     provider: { select: { name: true, settings: true, companyName: true, smsIntegrationSettings: true, semaphoreApiKey: true } },
                 },
             }),
-            prisma.billing.findUnique({
+            prisma_1.default.billing.findUnique({
                 where: { id, status: "PAID" },
                 include: {
                     client: true,
@@ -784,7 +787,7 @@ const sendEmailReminder = async (req, res) => {
         return res.status(400).json({ message: "Invalid Billing ID format (UUID required)" });
     }
     try {
-        const billing = await prisma.billing.findUnique({
+        const billing = await prisma_1.default.billing.findUnique({
             where: {
                 id
             },
@@ -796,7 +799,7 @@ const sendEmailReminder = async (req, res) => {
                 }
             }
         });
-        const provider = await prisma.provider.findUnique({
+        const provider = await prisma_1.default.provider.findUnique({
             where: {
                 id: providerId
             },
@@ -831,7 +834,7 @@ const sendEmailReminder = async (req, res) => {
             paymentUrl: `http://localhost:3000/checkout/payment/${billing?.id}`
         });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "EMAIL_REMINDER",
@@ -857,7 +860,7 @@ const sendSmsReminder = async (req, res) => {
         return res.status(400).json({ message: "Invalid Billing ID format (UUID required)" });
     }
     try {
-        const provider = await prisma.provider.findUnique({
+        const provider = await prisma_1.default.provider.findUnique({
             where: {
                 id: providerId
             },
@@ -866,7 +869,7 @@ const sendSmsReminder = async (req, res) => {
                 companyName: true
             }
         });
-        const billing = await prisma.billing.findUnique({
+        const billing = await prisma_1.default.billing.findUnique({
             where: { id },
             select: {
                 invoiceNumber: true,
@@ -901,7 +904,7 @@ const sendSmsReminder = async (req, res) => {
         if (data.apikey)
             return res.status(400).json({ message: "Invalid SMS Api Key" });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "REMINDER_SMS",
@@ -943,13 +946,13 @@ const generateBillingForAllAccounts = async (req, res) => {
         return res.status(400).json({ message: "Invalid month name" });
     }
     const period = `${month} ${year}`;
-    const provider = await prisma.provider.findUnique({
+    const provider = await prisma_1.default.provider.findUnique({
         where: { id: providerId },
         select: { settings: true, smsIntegrationSettings: true, semaphoreApiKey: true, companyName: true },
     });
     const settings = provider?.settings;
     try {
-        const accounts = await prisma.accounts.findMany({
+        const accounts = await prisma_1.default.accounts.findMany({
             where: {
                 status: "ACTIVE",
                 client: {
@@ -999,9 +1002,9 @@ const generateBillingForAllAccounts = async (req, res) => {
         if (billingsToCreate.length === 0) {
             return res.json({ message: "Billing already generated for this period" });
         }
-        await prisma.$transaction(billingsToCreate.map(b => {
+        await prisma_1.default.$transaction(billingsToCreate.map(b => {
             const fee = Number(b.account.servicePlan.monthlyFee || 0);
-            return prisma.billing.create({
+            return prisma_1.default.billing.create({
                 data: {
                     invoiceNumber: b.invoiceNumber,
                     clientId: b.clientId,
@@ -1030,10 +1033,10 @@ const generateBillingForAllAccounts = async (req, res) => {
                     const decryptedKey = (0, hasher_1.decrypt)(provider.semaphoreApiKey);
                     const messageTemplate = provider.smsIntegrationSettings?.sendWhenBillIsMadeTemplate || "";
                     for (const billingData of billingsToCreate) {
-                        const account = await prisma.accounts.findUnique({
+                        const account = await prisma_1.default.accounts.findUnique({
                             where: { id: billingData.accountId },
                         });
-                        const billing = await prisma.billing.findFirst({
+                        const billing = await prisma_1.default.billing.findFirst({
                             where: {
                                 accountId: billingData.accountId,
                                 period: billingData.period
@@ -1063,7 +1066,7 @@ const generateBillingForAllAccounts = async (req, res) => {
             });
         }
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "GENERATE",

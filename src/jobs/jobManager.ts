@@ -1,10 +1,7 @@
 import * as cron from "node-cron";
 import { generateInvoices } from "./generateInvoices";
 import { sendInvoiceReminders } from "./sendInvoiceReminders";
-
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import prisma from "../utils/prisma";
 
 interface JobRegistry {
   [key: string]: cron.ScheduledTask;

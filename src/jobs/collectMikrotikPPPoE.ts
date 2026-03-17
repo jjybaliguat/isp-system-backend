@@ -1,8 +1,6 @@
-import { PrismaClient } from "@prisma/client";
 import { closeMikrotikConnection, getMikrotikConnection } from "../helpers/mikrotik";
 import cron from "node-cron";
-
-const prisma = new PrismaClient();
+import prisma from "../utils/prisma";
 
 interface PreviousCounter {
   rx: number;

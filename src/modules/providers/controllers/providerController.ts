@@ -6,10 +6,7 @@ import { ProviderType, UserRole } from '@prisma/client';
 import { decrypt, encrypt } from '../../../utils/hasher';
 import Xendit from 'xendit-node';
 import bcrypt from "bcryptjs";
-
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import prisma from '../../../utils/prisma';
 
 export const getProvider = async (req: Request, res: Response) => {
     const {providerId} = req.user

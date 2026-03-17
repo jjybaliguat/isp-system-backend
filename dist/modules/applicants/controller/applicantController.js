@@ -1,8 +1,10 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteApplicant = exports.updateApplicant = exports.createApplicant = exports.getApplicationStatus = exports.getApplicant = exports.getApplicantsCount = exports.getApplicants = void 0;
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../../../utils/prisma"));
 const getApplicants = async (req, res) => {
     const { providerId } = req.user;
     const page = Number(req.query.page) || 1;
@@ -26,14 +28,14 @@ const getApplicants = async (req, res) => {
             ];
         }
         const [data, total] = await Promise.all([
-            prisma.applicant.findMany({
+            prisma_1.default.applicant.findMany({
                 where,
                 include: { coverage: true, servicePlan: true },
                 orderBy: { createdAt: 'desc' },
                 skip,
                 take: limit,
             }),
-            prisma.applicant.count({ where }),
+            prisma_1.default.applicant.count({ where }),
         ]);
         return res.status(200).json({
             data,
@@ -54,7 +56,7 @@ exports.getApplicants = getApplicants;
 const getApplicantsCount = async (req, res) => {
     const { providerId } = req.user;
     try {
-        const pendingApplicantsCount = await prisma.applicant.count({
+        const pendingApplicantsCount = await prisma_1.default.applicant.count({
             where: {
                 providerId,
                 applicationStatus: {
@@ -75,7 +77,7 @@ const getApplicant = async (req, res) => {
     const { providerId } = req.user;
     try {
         const applicantInclude = { applicationDocuments: true, coverage: true, servicePlan: true };
-        const applicant = await prisma.applicant.findFirst({
+        const applicant = await prisma_1.default.applicant.findFirst({
             where: { id, providerId },
             include: applicantInclude,
         });
@@ -94,7 +96,7 @@ const getApplicationStatus = async (req, res) => {
     try {
         if (!applicationNumber)
             return res.status(400).json({ message: "Missing application number" });
-        const applicant = await prisma.applicant.findUnique({
+        const applicant = await prisma_1.default.applicant.findUnique({
             where: {
                 applicationNumber
             },
@@ -124,7 +126,7 @@ const createApplicant = async (req, res) => {
     if (!name || !email)
         return res.status(400).json({ message: 'Missing required fields' });
     try {
-        const existing = await prisma.applicant.findUnique({ where: { email } });
+        const existing = await prisma_1.default.applicant.findUnique({ where: { email } });
         if (existing)
             return res.status(400).json({ message: 'Applicant with this email already exists' });
         // generate application number if not provided
@@ -142,8 +144,8 @@ const createApplicant = async (req, res) => {
             idType,
             applicationNumber: appNumber,
         };
-        const applicant = await prisma.applicant.create({ data });
-        prisma.log.create({
+        const applicant = await prisma_1.default.applicant.create({ data });
+        prisma_1.default.log.create({
             data: {
                 action: 'CREATE',
                 entity: 'Applicant',
@@ -164,11 +166,11 @@ const updateApplicant = async (req, res) => {
     const body = req.body;
     const { id: userId, providerId } = req.user;
     try {
-        const existing = await prisma.applicant.findUnique({ where: { id } });
+        const existing = await prisma_1.default.applicant.findUnique({ where: { id } });
         if (!existing)
             return res.status(404).json({ message: 'Applicant not found' });
-        const updated = await prisma.applicant.update({ where: { id }, data: body });
-        prisma.log.create({
+        const updated = await prisma_1.default.applicant.update({ where: { id }, data: body });
+        prisma_1.default.log.create({
             data: {
                 action: 'UPDATE',
                 entity: 'Applicant',
@@ -189,11 +191,11 @@ const deleteApplicant = async (req, res) => {
     const { id } = req.params;
     const { id: userId, providerId } = req.user;
     try {
-        const applicant = await prisma.applicant.findUnique({ where: { id } });
+        const applicant = await prisma_1.default.applicant.findUnique({ where: { id } });
         if (!applicant)
             return res.status(404).json({ message: 'Applicant not found' });
-        await prisma.applicant.delete({ where: { id } });
-        prisma.log.create({
+        await prisma_1.default.applicant.delete({ where: { id } });
+        prisma_1.default.log.create({
             data: {
                 action: 'DELETE',
                 entity: 'Applicant',

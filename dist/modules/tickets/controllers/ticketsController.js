@@ -9,8 +9,7 @@ const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 const imageSizeLimiter_1 = require("../../../middlewares/imageSizeLimiter");
 const multer_1 = __importDefault(require("multer"));
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../../../utils/prisma"));
 const getTickets = async (req, res) => {
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 10;
@@ -49,7 +48,7 @@ const getTickets = async (req, res) => {
             ];
         }
         const [data, total] = await Promise.all([
-            prisma.ticket.findMany({
+            prisma_1.default.ticket.findMany({
                 where: whereClause,
                 include: {
                     client: {
@@ -81,7 +80,7 @@ const getTickets = async (req, res) => {
                 skip,
                 take: limit,
             }),
-            prisma.ticket.count({
+            prisma_1.default.ticket.count({
                 where: whereClause
             })
         ]);
@@ -106,7 +105,7 @@ const createTicket = async (req, res) => {
     const { dueDate } = body;
     const { id: userId, providerId } = req.user;
     try {
-        const user = await prisma.user.findUnique({
+        const user = await prisma_1.default.user.findUnique({
             where: {
                 id: userId
             },
@@ -120,7 +119,7 @@ const createTicket = async (req, res) => {
         startOfDay.setHours(0, 0, 0, 0);
         const endOfDay = new Date();
         endOfDay.setHours(23, 59, 59, 999);
-        const existingCount = await prisma.ticket.count({
+        const existingCount = await prisma_1.default.ticket.count({
             where: {
                 clientId: user.client?.id,
                 providerId,
@@ -147,7 +146,7 @@ const createTicket = async (req, res) => {
                 return res.status(400).json({ error: "Invalid dueDate format" });
             }
         }
-        const ticket = await prisma.ticket.create({
+        const ticket = await prisma_1.default.ticket.create({
             data: {
                 ...body,
                 dueDate: parsedDueDate,
@@ -157,7 +156,7 @@ const createTicket = async (req, res) => {
             }
         });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "CREATE",
@@ -183,7 +182,7 @@ const updateTicket = async (req, res) => {
     const { assignedToTeamId, assignedToEmployeeId } = body;
     try {
         // Get the existing ticket first
-        const ticket = await prisma.ticket.findUnique({
+        const ticket = await prisma_1.default.ticket.findUnique({
             where: { id, providerId },
         });
         if (!ticket) {
@@ -197,7 +196,7 @@ const updateTicket = async (req, res) => {
                 ? null
                 : assignedToEmployeeId || ticket.assignedToEmployeeId,
         };
-        const updatedTicket = await prisma.ticket.update({
+        const updatedTicket = await prisma_1.default.ticket.update({
             where: { id, providerId },
             data: {
                 ...body,
@@ -221,7 +220,7 @@ const updateTicket = async (req, res) => {
             }
             if (assignedToEmployeeId) {
                 if (assignedToEmployeeId !== "unassigned") {
-                    const employee = await prisma.employees.findUnique({
+                    const employee = await prisma_1.default.employees.findUnique({
                         where: {
                             id: assignedToEmployeeId
                         }
@@ -231,7 +230,7 @@ const updateTicket = async (req, res) => {
             }
             if (assignedToTeamId) {
                 if (assignedToTeamId !== "unassigned") {
-                    const team = await prisma.employeesTeam.findUnique({
+                    const team = await prisma_1.default.employeesTeam.findUnique({
                         where: {
                             id: assignedToTeamId
                         }
@@ -245,7 +244,7 @@ const updateTicket = async (req, res) => {
         }
         // Only log if something actually changed
         if (changes.length > 0) {
-            await prisma.ticketLog.create({
+            await prisma_1.default.ticketLog.create({
                 data: {
                     action: `Updated ticket: ${changes.join(", ")}`,
                     ticketId: id,
@@ -254,7 +253,7 @@ const updateTicket = async (req, res) => {
             });
         }
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "UPDATE",
@@ -277,7 +276,7 @@ const getTicketLogs = async (req, res) => {
     const { id: ticketId } = req.params;
     const providerId = req.user.providerId;
     try {
-        const ticketLogs = await prisma.ticketLog.findMany({
+        const ticketLogs = await prisma_1.default.ticketLog.findMany({
             where: {
                 ticketId,
                 user: {
@@ -314,7 +313,7 @@ const deleteTicket = async (req, res) => {
     const { id } = req.params;
     const { id: userId, providerId } = req.user;
     try {
-        const ticket = await prisma.ticket.findUnique({
+        const ticket = await prisma_1.default.ticket.findUnique({
             where: {
                 id
             },
@@ -326,7 +325,7 @@ const deleteTicket = async (req, res) => {
                 }
             }
         });
-        await prisma.ticket.delete({
+        await prisma_1.default.ticket.delete({
             where: {
                 id
             }
@@ -343,7 +342,7 @@ const deleteTicket = async (req, res) => {
             });
         }
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "DELETE",
@@ -375,7 +374,7 @@ const createTicketComment = async (req, res) => {
         try {
             let message = req.body.message || "";
             if (req.file) {
-                const provider = await prisma.provider.findUnique({
+                const provider = await prisma_1.default.provider.findUnique({
                     where: {
                         id: providerId
                     },
@@ -389,7 +388,7 @@ const createTicketComment = async (req, res) => {
                 const fileUrl = `${protocol}://${req.get("host")}/uploads/${folderName}/${req.file.filename}`;
                 message += `\n\n![${req.file.originalname}](${fileUrl})`;
             }
-            const comment = await prisma.ticketComment.create({
+            const comment = await prisma_1.default.ticketComment.create({
                 data: {
                     ticketId,
                     userId,
@@ -408,7 +407,7 @@ exports.createTicketComment = createTicketComment;
 const getTicketComments = async (req, res) => {
     const { id: ticketId } = req.params;
     try {
-        const comments = await prisma.ticketComment.findMany({
+        const comments = await prisma_1.default.ticketComment.findMany({
             where: {
                 ticketId
             },
@@ -432,12 +431,12 @@ exports.getTicketComments = getTicketComments;
 const deleteTicketComment = async (req, res) => {
     const { id } = req.params;
     try {
-        const comment = await prisma.ticketComment.findUnique({
+        const comment = await prisma_1.default.ticketComment.findUnique({
             where: {
                 id
             }
         });
-        await prisma.ticketComment.delete({
+        await prisma_1.default.ticketComment.delete({
             where: {
                 id
             }
@@ -462,7 +461,7 @@ exports.deleteTicketComment = deleteTicketComment;
 const getAssignedTickets = async (req, res) => {
     const assignedTo = typeof req.query.assignedTo === "string" ? req.query.assignedTo : undefined;
     try {
-        const user = await prisma.user.findUnique({
+        const user = await prisma_1.default.user.findUnique({
             where: { id: assignedTo },
             include: {
                 employee: {
@@ -482,7 +481,7 @@ const getAssignedTickets = async (req, res) => {
         if (user.employee.teamId) {
             orFilters.push({ assignedToTeamId: user.employee.teamId });
         }
-        const tickets = await prisma.ticket.findMany({
+        const tickets = await prisma_1.default.ticket.findMany({
             where: {
                 OR: orFilters,
             },

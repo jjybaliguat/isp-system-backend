@@ -4,8 +4,7 @@ import { decrypt } from "../../../utils/hasher";
 
 import { PrismaClient } from "@prisma/client";
 import { sendSms } from "../../../jobs/sendSms";
-
-const prisma = new PrismaClient();
+import prisma from "../../../utils/prisma";
 
 export const getPayments = async(req: Request, res: Response) => {
   const page = Number(req.query.page) || 1;

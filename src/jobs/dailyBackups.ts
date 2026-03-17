@@ -1,8 +1,6 @@
 import cron from 'node-cron';
-import { PrismaClient } from '@prisma/client';
 import { createBackupZipForProvider, sendBackupToProvider } from '../modules/admin/controller/backupController';
-
-const prisma = new PrismaClient();
+import prisma from '../utils/prisma';
 
 export function scheduleDailyBackups() {
   // run at 02:30 AM Asia/Manila daily

@@ -1,14 +1,16 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateBackupSettings = exports.updateDocumentsSettings = exports.updateBillingSettings = exports.updatePaymentSettings = exports.updateNotificationsSettings = void 0;
 const jobManager_1 = require("../../jobs/jobManager");
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../../utils/prisma"));
 const updateNotificationsSettings = async (req, res) => {
     const { enabled, emailUser, emailPass, emailHost, emailPort, senderName, invoiceReminderTemplate, paymentConfirmationTemplate, overdueNoticeTemplate } = req.body;
     const { providerId } = req.user;
     try {
-        const provider = await prisma.provider.findUnique({
+        const provider = await prisma_1.default.provider.findUnique({
             where: { id: providerId },
             select: { settings: true },
         });
@@ -33,7 +35,7 @@ const updateNotificationsSettings = async (req, res) => {
                 overdueNoticeTemplate,
             },
         };
-        const updatedProvider = await prisma.provider.update({
+        const updatedProvider = await prisma_1.default.provider.update({
             where: { id: providerId },
             data: {
                 settings: updatedSettings,
@@ -51,7 +53,7 @@ const updatePaymentSettings = async (req, res) => {
     const { latePaymentGracePeriod } = req.body;
     const { providerId } = req.user;
     try {
-        const provider = await prisma.provider.findUnique({
+        const provider = await prisma_1.default.provider.findUnique({
             where: { id: providerId },
             select: { settings: true },
         });
@@ -68,7 +70,7 @@ const updatePaymentSettings = async (req, res) => {
                 latePaymentGracePeriod
             },
         };
-        const updatedProvider = await prisma.provider.update({
+        const updatedProvider = await prisma_1.default.provider.update({
             where: { id: providerId },
             data: {
                 settings: updatedSettings,
@@ -86,7 +88,7 @@ const updateBillingSettings = async (req, res) => {
     const { autoInvoicing, invoiceGenerationDaysBeforeDue, sendInvoiceReminderDaysBeforeDue, } = req.body;
     const { providerId } = req.user;
     try {
-        const provider = await prisma.provider.findUnique({
+        const provider = await prisma_1.default.provider.findUnique({
             where: { id: providerId },
             select: { name: true, settings: true },
         });
@@ -105,7 +107,7 @@ const updateBillingSettings = async (req, res) => {
                 sendInvoiceReminderDaysBeforeDue,
             },
         };
-        const updatedProvider = await prisma.provider.update({
+        const updatedProvider = await prisma_1.default.provider.update({
             where: { id: providerId },
             data: {
                 settings: updatedSettings,
@@ -133,7 +135,7 @@ const updateDocumentsSettings = async (req, res) => {
     companyLogoUrl, footerMessage } = req.body;
     const { providerId } = req.user;
     try {
-        const provider = await prisma.provider.findUnique({
+        const provider = await prisma_1.default.provider.findUnique({
             where: { id: providerId },
             select: { settings: true },
         });
@@ -152,7 +154,7 @@ const updateDocumentsSettings = async (req, res) => {
                 footerMessage
             },
         };
-        const updatedProvider = await prisma.provider.update({
+        const updatedProvider = await prisma_1.default.provider.update({
             where: { id: providerId },
             data: {
                 settings: updatedSettings,
@@ -170,7 +172,7 @@ const updateBackupSettings = async (req, res) => {
     const { providerId } = req.user;
     const { enabled, backUpEmail } = req.body;
     try {
-        const updateProvider = await prisma.provider.update({
+        const updateProvider = await prisma_1.default.provider.update({
             where: {
                 id: providerId
             },

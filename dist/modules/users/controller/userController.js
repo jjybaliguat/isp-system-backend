@@ -5,8 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.changePass = exports.deleteUser = exports.createUser = exports.getUsers = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../../../utils/prisma"));
 const getUsers = async (req, res) => {
     const { providerId } = req.user;
     const page = Number(req.query.page) || 1;
@@ -31,7 +30,7 @@ const getUsers = async (req, res) => {
             })
         };
         const [users, total] = await Promise.all([
-            prisma.user.findMany({
+            prisma_1.default.user.findMany({
                 where: whereClause,
                 include: {
                     employee: {
@@ -58,7 +57,7 @@ const getUsers = async (req, res) => {
                 skip,
                 take: limit
             }),
-            prisma.user.count({ where: whereClause })
+            prisma_1.default.user.count({ where: whereClause })
         ]);
         return res.status(200).json({
             data: users,
@@ -91,13 +90,13 @@ const createUser = async (req, res) => {
         /* ================= EMPLOYEE FLOW ================= */
         if (employeeId) {
             sourceField = "employeeId";
-            source = await prisma.employees.findFirst({
+            source = await prisma_1.default.employees.findFirst({
                 where: { id: employeeId, providerId }
             });
             if (!source) {
                 return res.status(400).json({ message: "Employee not found" });
             }
-            const isUserExist = await prisma.user.findFirst({
+            const isUserExist = await prisma_1.default.user.findFirst({
                 where: { employeeId }
             });
             if (isUserExist) {
@@ -109,13 +108,13 @@ const createUser = async (req, res) => {
         /* ================= CLIENT FLOW ================= */
         if (clientId) {
             sourceField = "clientId";
-            source = await prisma.client.findFirst({
+            source = await prisma_1.default.client.findFirst({
                 where: { id: clientId, providerId }
             });
             if (!source) {
                 return res.status(400).json({ message: "Client not found" });
             }
-            const isUserExist = await prisma.user.findFirst({
+            const isUserExist = await prisma_1.default.user.findFirst({
                 where: { clientId }
             });
             if (isUserExist) {
@@ -125,7 +124,7 @@ const createUser = async (req, res) => {
             }
         }
         const hashedPassword = await bcryptjs_1.default.hash(password, 10);
-        const newUser = await prisma.user.create({
+        const newUser = await prisma_1.default.user.create({
             data: {
                 email: source.email,
                 fullName: source.fullName,
@@ -137,7 +136,7 @@ const createUser = async (req, res) => {
             }
         });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "CREATE",
@@ -160,7 +159,7 @@ const deleteUser = async (req, res) => {
     const { id } = req.params;
     const { id: userId, providerId } = req.user;
     try {
-        const user = await prisma.user.findUnique({
+        const user = await prisma_1.default.user.findUnique({
             where: {
                 id,
                 providerId
@@ -169,14 +168,14 @@ const deleteUser = async (req, res) => {
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
-        await prisma.user.delete({
+        await prisma_1.default.user.delete({
             where: {
                 id,
                 providerId
             }
         });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "DELETE",
@@ -199,7 +198,7 @@ const changePass = async (req, res) => {
     const { id } = req.params;
     const { currentPassword, newPassword } = req.body;
     try {
-        const user = await prisma.user.findUnique({
+        const user = await prisma_1.default.user.findUnique({
             where: {
                 id
             },
@@ -213,7 +212,7 @@ const changePass = async (req, res) => {
                 return res.status(400).json({ message: "Invalid current password" });
             }
             const newPasswordHashed = await bcryptjs_1.default.hash(newPassword, 10);
-            await prisma.user.update({
+            await prisma_1.default.user.update({
                 where: {
                     id
                 },

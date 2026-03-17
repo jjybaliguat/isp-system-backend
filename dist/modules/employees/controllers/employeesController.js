@@ -1,8 +1,10 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteEmployee = exports.updateEmployee = exports.createEmployee = exports.getEmployees = void 0;
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../../../utils/prisma"));
 const getEmployees = async (req, res) => {
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 10;
@@ -34,7 +36,7 @@ const getEmployees = async (req, res) => {
             ];
         }
         const [data, total] = await Promise.all([
-            prisma.employees.findMany({
+            prisma_1.default.employees.findMany({
                 where: whereClause,
                 include: {
                     team: {
@@ -48,7 +50,7 @@ const getEmployees = async (req, res) => {
                 skip,
                 take: limit,
             }),
-            prisma.employees.count({
+            prisma_1.default.employees.count({
                 where: whereClause
             })
         ]);
@@ -79,7 +81,7 @@ const createEmployee = async (req, res) => {
     if (!fullName || !email || !phoneNumber || !address || !role || !hireDate) {
         return res.status(400).json({ message: "Missing required fields" });
     }
-    const isEmailExist = await prisma.employees.findUnique({
+    const isEmailExist = await prisma_1.default.employees.findUnique({
         where: {
             email: email
         }
@@ -87,12 +89,12 @@ const createEmployee = async (req, res) => {
     if (isEmailExist)
         return res.status(400).json({ message: "Email already exists" });
     try {
-        const user = await prisma.user.findUnique({
+        const user = await prisma_1.default.user.findUnique({
             where: {
                 id: userId
             }
         });
-        const newEmployee = await prisma.employees.create({
+        const newEmployee = await prisma_1.default.employees.create({
             data: {
                 fullName,
                 email,
@@ -105,7 +107,7 @@ const createEmployee = async (req, res) => {
                 providerId
             }
         });
-        await prisma.log.create({
+        await prisma_1.default.log.create({
             data: {
                 action: "CREATE",
                 entity: "Employee",
@@ -150,14 +152,14 @@ const updateEmployee = async (req, res) => {
         dataToUpdate.hireDate = dateHired;
     }
     try {
-        const user = await prisma.user.findUnique({
+        const user = await prisma_1.default.user.findUnique({
             where: { id: userId }
         });
-        const updatedEmployee = await prisma.employees.update({
+        const updatedEmployee = await prisma_1.default.employees.update({
             where: { id, providerId },
             data: dataToUpdate
         });
-        await prisma.log.create({
+        await prisma_1.default.log.create({
             data: {
                 userId,
                 providerId,
@@ -178,23 +180,23 @@ const deleteEmployee = async (req, res) => {
     const { id } = req.params;
     const { id: userId, providerId } = req.user;
     try {
-        const user = await prisma.user.findUnique({
+        const user = await prisma_1.default.user.findUnique({
             where: {
                 id: userId
             }
         });
-        const employee = await prisma.employees.findUnique({
+        const employee = await prisma_1.default.employees.findUnique({
             where: {
                 id
             }
         });
-        await prisma.employees.delete({
+        await prisma_1.default.employees.delete({
             where: {
                 id,
                 providerId
             }
         });
-        await prisma.log.create({
+        await prisma_1.default.log.create({
             data: {
                 entity: "Employee",
                 action: "DELETE",

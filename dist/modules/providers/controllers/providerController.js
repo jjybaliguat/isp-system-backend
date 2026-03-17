@@ -11,12 +11,11 @@ const client_1 = require("@prisma/client");
 const hasher_1 = require("../../../utils/hasher");
 const xendit_node_1 = __importDefault(require("xendit-node"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
-const client_2 = require("@prisma/client");
-const prisma = new client_2.PrismaClient();
+const prisma_1 = __importDefault(require("../../../utils/prisma"));
 const getProvider = async (req, res) => {
     const { providerId } = req.user;
     try {
-        const provider = await prisma.provider.findUnique({
+        const provider = await prisma_1.default.provider.findUnique({
             where: {
                 id: providerId
             }
@@ -54,14 +53,14 @@ const getProviders = async (req, res) => {
             }),
         };
         const [providers, total] = await Promise.all([
-            prisma.provider.findMany({
+            prisma_1.default.provider.findMany({
                 where: whereClause,
                 include: {
                     branches: true,
                     clients: true
                 }
             }),
-            prisma.provider.count({ where: whereClause })
+            prisma_1.default.provider.count({ where: whereClause })
         ]);
         return res.status(200).json({
             data: providers,
@@ -81,7 +80,7 @@ const getProviders = async (req, res) => {
 exports.getProviders = getProviders;
 const getProvidersWithFilteredResponse = async (req, res) => {
     try {
-        const provider = await prisma.provider.findFirst({
+        const provider = await prisma_1.default.provider.findFirst({
             where: {
                 OR: [
                     { companyName: { contains: 'sierra', mode: 'insensitive' } },
@@ -138,7 +137,7 @@ exports.getProvidersWithFilteredResponse = getProvidersWithFilteredResponse;
 const getProviderById = async (req, res) => {
     const { id } = req.params;
     try {
-        const provider = await prisma.provider.findUnique({
+        const provider = await prisma_1.default.provider.findUnique({
             where: {
                 id
             }
@@ -170,13 +169,13 @@ const createProvider = async (req, res) => {
         return res.status(400).json({ ...errors });
     }
     try {
-        const existingProvider = await prisma.provider.findUnique({
+        const existingProvider = await prisma_1.default.provider.findUnique({
             where: { email }
         });
         if (existingProvider) {
             return res.status(409).json({ message: 'Provider with this email already exists' });
         }
-        const newProvider = await prisma.provider.create({
+        const newProvider = await prisma_1.default.provider.create({
             data: {
                 ...req.body,
                 parentProviderId: providerId,
@@ -184,7 +183,7 @@ const createProvider = async (req, res) => {
             }
         });
         const hashedPassword = await bcryptjs_1.default.hash("admin123456", 10);
-        await prisma.user.create({
+        await prisma_1.default.user.create({
             data: {
                 email,
                 password: hashedPassword,
@@ -208,13 +207,13 @@ const updateProvider = async (req, res) => {
         return res.status(400).json({ message: "Invalid provider ID format" });
     }
     try {
-        const existingProvider = await prisma.provider.findUnique({
+        const existingProvider = await prisma_1.default.provider.findUnique({
             where: { id }
         });
         if (!existingProvider) {
             return res.status(404).json({ message: 'Provider not found' });
         }
-        const updatedProvider = await prisma.provider.update({
+        const updatedProvider = await prisma_1.default.provider.update({
             where: { id },
             data: {
                 name: name ?? existingProvider.name,
@@ -239,7 +238,7 @@ const deleteProvider = async (req, res) => {
         return res.status(400).json({ message: 'Invalid provider ID format' });
     }
     try {
-        await prisma.provider.delete({
+        await prisma_1.default.provider.delete({
             where: {
                 id,
                 parentProviderId: providerId
@@ -289,7 +288,7 @@ const updateXenditKey = async (req, res) => {
                 message: "No valid fields provided for update",
             });
         }
-        await prisma.provider.update({
+        await prisma_1.default.provider.update({
             where: { id: providerId },
             data,
         });
@@ -310,7 +309,7 @@ const updateSemaphoreKey = async (req, res) => {
         return res.status(401).json({ message: "You are not allowed to perform this operation" });
     try {
         const encryptedKey = (0, hasher_1.encrypt)(key);
-        const newKey = await prisma.provider.update({
+        const newKey = await prisma_1.default.provider.update({
             where: {
                 id: providerId
             },
@@ -329,7 +328,7 @@ exports.updateSemaphoreKey = updateSemaphoreKey;
 const getStoredKey = async (req, res) => {
     const { providerId } = req.user;
     try {
-        const provider = await prisma.provider.findUnique({
+        const provider = await prisma_1.default.provider.findUnique({
             where: {
                 id: providerId
             },
@@ -392,7 +391,7 @@ const updateAccount = async (req, res) => {
     const { providerId } = req.user;
     try {
         // update user first
-        const updatedUser = await prisma.user.update({
+        const updatedUser = await prisma_1.default.user.update({
             where: {
                 id: userId,
                 providerId
@@ -403,7 +402,7 @@ const updateAccount = async (req, res) => {
             }
         });
         // perform provider update
-        const updatedProvider = await prisma.provider.update({
+        const updatedProvider = await prisma_1.default.provider.update({
             where: {
                 id: providerId
             },
@@ -451,8 +450,8 @@ const uploadProviderLogo = async (req, res) => {
         const protocol = process.env.NODE_ENV === 'production' ? 'https' : req.protocol;
         const fileUrl = `${protocol}://${req.get('host')}/uploads/${folderName}/${file.filename}`;
         // update provider with new logo url and delete old if needed
-        const existingProvider = await prisma.provider.findUnique({ where: { id: providerId }, select: { companyLogoUrl: true } });
-        const updatedProvider = await prisma.provider.update({ where: { id: providerId }, data: { companyLogoUrl: fileUrl } });
+        const existingProvider = await prisma_1.default.provider.findUnique({ where: { id: providerId }, select: { companyLogoUrl: true } });
+        const updatedProvider = await prisma_1.default.provider.update({ where: { id: providerId }, data: { companyLogoUrl: fileUrl } });
         // delete old file if it was local and different
         try {
             if (existingProvider?.companyLogoUrl && existingProvider.companyLogoUrl !== fileUrl && existingProvider.companyLogoUrl.includes('/uploads/')) {
@@ -480,13 +479,13 @@ const createSmsIntegrationSettings = async (req, res) => {
     const { sendWhenBillIsMade, sendWhenBillIsDue, sendWhenPaymentIsMade, sendWhenCustomerAdded, sendDaysBeforeDue, sendWhenBillIsMadeTemplate, sendWhenBillIsDueTemplate, sendWhenPaymentIsMadeTemplate, sendWhenCustomerAddedTemplate, sendDaysBeforeDueTemplate } = req.body;
     const { providerId } = req.user;
     try {
-        const existingSettings = await prisma.smsIntegrationSettings.findUnique({
+        const existingSettings = await prisma_1.default.smsIntegrationSettings.findUnique({
             where: {
                 providerId
             }
         });
         if (existingSettings) {
-            const updatedSettings = await prisma.smsIntegrationSettings.update({
+            const updatedSettings = await prisma_1.default.smsIntegrationSettings.update({
                 where: {
                     providerId
                 },
@@ -507,7 +506,7 @@ const createSmsIntegrationSettings = async (req, res) => {
             return res.status(200).json(updatedSettings);
         }
         else {
-            const settings = await prisma.smsIntegrationSettings.create({
+            const settings = await prisma_1.default.smsIntegrationSettings.create({
                 data: {
                     providerId,
                     sendWhenBillIsMade,
@@ -535,7 +534,7 @@ exports.createSmsIntegrationSettings = createSmsIntegrationSettings;
 const getSmsIntegrationSettings = async (req, res) => {
     const { providerId } = req.user;
     try {
-        const settings = await prisma.smsIntegrationSettings.findUnique({
+        const settings = await prisma_1.default.smsIntegrationSettings.findUnique({
             where: {
                 providerId
             }

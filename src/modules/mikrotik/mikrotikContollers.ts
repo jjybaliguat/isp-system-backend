@@ -1,8 +1,5 @@
-import { PrismaClient } from "@prisma/client";
 import { Request, Response } from "express";
-import { getMikrotikConnection } from "../../helpers/mikrotik";
-
-const prisma = new PrismaClient();
+import prisma from "../../utils/prisma";
 
 export const getActivePPPoEAccounts = async (
   req: Request,

@@ -1,9 +1,7 @@
 import { addDays, startOfDay, endOfDay } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { sendInvoiceReminderEmail } from "./sendInvoiceReminderEmail";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import prisma from "../utils/prisma";
 
 export async function sendInvoiceReminders(providerId: string) {
   try {

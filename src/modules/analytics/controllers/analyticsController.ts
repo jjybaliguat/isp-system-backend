@@ -3,7 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import { subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear } from "date-fns"
 import { Request, Response } from "express"
 import { getLocalDate } from "../../../utils/getTimeOffset"
-const prisma = new PrismaClient();
+import prisma from "../../../utils/prisma";
 
 export const getFinanceAnalytics = async (req: Request, res: Response) => {
     const {providerId} = req.user

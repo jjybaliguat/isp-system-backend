@@ -11,7 +11,7 @@ const uuid_1 = require("uuid");
 const hasher_1 = require("../../../utils/hasher");
 const sendSms_1 = require("../../../jobs/sendSms");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../../../utils/prisma"));
 const getClients = async (req, res) => {
     const { id: userId, providerId } = req.user;
     const page = Number(req.query.page) || 1;
@@ -49,7 +49,7 @@ const getClients = async (req, res) => {
             }),
         };
         const [clients, total] = await Promise.all([
-            prisma.client.findMany({
+            prisma_1.default.client.findMany({
                 where: whereClause,
                 include: {
                     servicePlan: true,
@@ -104,7 +104,7 @@ const getClients = async (req, res) => {
                 skip,
                 take: limit
             }),
-            prisma.client.count({ where: whereClause }),
+            prisma_1.default.client.count({ where: whereClause }),
         ]);
         // Filter billings per account by billingYear
         const clientsWithFilteredBillings = clients.map((client) => {
@@ -164,7 +164,7 @@ const getAccounts = async (req, res) => {
         };
         // Query + total count in parallel
         const [accounts, total] = await Promise.all([
-            prisma.accounts.findMany({
+            prisma_1.default.accounts.findMany({
                 where: whereClause,
                 include: {
                     servicePlan: true,
@@ -196,7 +196,7 @@ const getAccounts = async (req, res) => {
                 skip,
                 take: limit,
             }),
-            prisma.accounts.count({ where: whereClause }),
+            prisma_1.default.accounts.count({ where: whereClause }),
         ]);
         return res.status(200).json({
             data: accounts,
@@ -234,7 +234,7 @@ const getClientsAnalytics = async (req, res) => {
             dayEnd.setUTCHours(23, 59, 59, 999);
             const dateStr = dayStart.toISOString().split("T")[0];
             // Count new clients installed on this date
-            const newCount = await prisma.client.count({
+            const newCount = await prisma_1.default.client.count({
                 where: {
                     providerId,
                     installationDate: {
@@ -245,7 +245,7 @@ const getClientsAnalytics = async (req, res) => {
                 },
             });
             // Count clients terminated on this date
-            const terminatedCount = await prisma.client.count({
+            const terminatedCount = await prisma_1.default.client.count({
                 where: {
                     providerId,
                     terminationDate: {
@@ -276,7 +276,7 @@ exports.getClientsAnalytics = getClientsAnalytics;
 const getPortalData = async (req, res) => {
     const { id } = req.user;
     try {
-        const user = await prisma.user.findUnique({
+        const user = await prisma_1.default.user.findUnique({
             where: { id },
             include: {
                 client: {
@@ -335,10 +335,10 @@ const getClientsCount = async (req, res) => {
     }
     try {
         const [total, active, partiallyDisconnected, terminated] = await Promise.all([
-            prisma.client.count({ where: { providerId } }),
-            prisma.client.count({ where: { providerId, status: "ACTIVE" } }),
-            prisma.client.count({ where: { providerId, status: "PARTIALLY_DISCONNECTED" } }),
-            prisma.client.count({ where: { providerId, status: "TERMINATED" } }),
+            prisma_1.default.client.count({ where: { providerId } }),
+            prisma_1.default.client.count({ where: { providerId, status: "ACTIVE" } }),
+            prisma_1.default.client.count({ where: { providerId, status: "PARTIALLY_DISCONNECTED" } }),
+            prisma_1.default.client.count({ where: { providerId, status: "TERMINATED" } }),
         ]);
         return res.status(200).json({
             total,
@@ -357,7 +357,7 @@ const getClientById = async (req, res) => {
     const { id } = req.params;
     const { providerId } = req.user;
     try {
-        const client = await prisma.client.findUnique({
+        const client = await prisma_1.default.client.findUnique({
             where: {
                 id,
                 providerId
@@ -412,10 +412,10 @@ const createClient = async (req, res) => {
         return res.status(400).json({ ...errors });
     }
     const [isEmailExisting, isCodeExisting, accountNumberExisting, phoneNumberExisting] = await Promise.all([
-        prisma.client.findUnique({ where: { email } }),
-        prisma.client.findUnique({ where: { code } }),
-        prisma.client.findUnique({ where: { accountNumber } }),
-        prisma.client.findUnique({ where: { phoneNumber } }),
+        prisma_1.default.client.findUnique({ where: { email } }),
+        prisma_1.default.client.findUnique({ where: { code } }),
+        prisma_1.default.client.findUnique({ where: { accountNumber } }),
+        prisma_1.default.client.findUnique({ where: { phoneNumber } }),
     ]);
     if (isEmailExisting)
         return res.status(400).json({ error: 'Email already exists' });
@@ -426,11 +426,11 @@ const createClient = async (req, res) => {
     if (phoneNumberExisting)
         return res.status(400).json({ error: 'Phone Number already exists' });
     try {
-        const provider = await prisma.provider.findUnique({
+        const provider = await prisma_1.default.provider.findUnique({
             where: { id: providerId },
             select: { settings: true, smsIntegrationSettings: true, companyName: true, semaphoreApiKey: true },
         });
-        const result = await prisma.$transaction(async (tx) => {
+        const result = await prisma_1.default.$transaction(async (tx) => {
             const client = await tx.client.create({
                 data: {
                     code,
@@ -513,7 +513,7 @@ const createClient = async (req, res) => {
             }
         }
         if (odpPortId && odpPortId !== "") {
-            await prisma.odpPort.update({
+            await prisma_1.default.odpPort.update({
                 where: {
                     id: odpPortId
                 },
@@ -527,7 +527,7 @@ const createClient = async (req, res) => {
         const settings = provider?.settings;
         if (createBill) {
             // Fetch monthly payment from service plan
-            const servicePlan = await prisma.servicePlan.findUnique({ where: { id: servicePlanId } });
+            const servicePlan = await prisma_1.default.servicePlan.findUnique({ where: { id: servicePlanId } });
             if (!servicePlan)
                 throw new Error("Service plan not found");
             const monthlyPayment = servicePlan.monthlyFee;
@@ -543,7 +543,7 @@ const createClient = async (req, res) => {
                         const invoiceNumber = `${prefix}${billMonth.getFullYear().toString().slice(2)}${Math.floor(Math.random() * 1e10)
                             .toString()
                             .padStart(10, "0")}`;
-                        await prisma.billing.create({
+                        await prisma_1.default.billing.create({
                             data: {
                                 clientId: result.client.id,
                                 accountId: result.account.id,
@@ -571,7 +571,7 @@ const createClient = async (req, res) => {
                     const start = (0, date_fns_1.startOfMonth)(today);
                     const period = `${start.toLocaleString("default", { month: "long" })} ${start.getFullYear()}`;
                     const invoiceNumber = `${prefix}${today.getFullYear().toString().slice(2)}${Math.floor(Math.random() * 1e10).toString().padStart(10, '0')}`;
-                    await prisma.billing.create({
+                    await prisma_1.default.billing.create({
                         data: {
                             clientId: result.client.id,
                             accountId: result.account.id,
@@ -599,7 +599,7 @@ const createClient = async (req, res) => {
                     const start = (0, date_fns_1.startOfMonth)(nextMonth);
                     const period = `${nextMonth.toLocaleString("default", { month: "long" })} ${nextMonth.getFullYear()}`;
                     const invoiceNumber = `${prefix}${today.getFullYear().toString().slice(2)}${Math.floor(Math.random() * 1e10).toString().padStart(10, '0')}`;
-                    await prisma.billing.create({
+                    await prisma_1.default.billing.create({
                         data: {
                             clientId: result.client.id,
                             accountId: result.account.id,
@@ -627,7 +627,7 @@ const createClient = async (req, res) => {
                     const period = `Prorated`;
                     const invoiceNumber = `${prefix}${today.getFullYear().toString().slice(2)}${Math.floor(Math.random() * 1e10).toString().padStart(10, '0')}`;
                     const dueDate = new Date(today.getFullYear(), today.getMonth() + 1, Number(result.client.billingDay));
-                    await prisma.billing.create({
+                    await prisma_1.default.billing.create({
                         data: {
                             clientId: result.client.id,
                             accountId: result.account.id,
@@ -652,7 +652,7 @@ const createClient = async (req, res) => {
                 }
             }
         }
-        const user = await prisma.user.findUnique({
+        const user = await prisma_1.default.user.findUnique({
             where: { id: userId, providerId: providerId },
             include: {
                 employee: true,
@@ -712,7 +712,7 @@ const createAccount = async (req, res) => {
         return res.status(400).json({ ...errors });
     }
     try {
-        const result = await prisma.$transaction(async (tx) => {
+        const result = await prisma_1.default.$transaction(async (tx) => {
             // 1. Create account
             const account = await tx.accounts.create({
                 data: {
@@ -784,7 +784,7 @@ const createAccount = async (req, res) => {
             });
             return updatedAccount;
         });
-        const provider = await prisma.provider.findUnique({
+        const provider = await prisma_1.default.provider.findUnique({
             where: { id: providerId },
             select: { settings: true, smsIntegrationSettings: true, companyName: true, semaphoreApiKey: true },
         });
@@ -812,7 +812,7 @@ const createAccount = async (req, res) => {
         if (generateBill && result) {
             // Fetch monthly payment from service plan
             console.log("Account Created:", result.accountNumber, " - id", result.id);
-            const servicePlan = await prisma.servicePlan.findUnique({ where: { id: servicePlanId } });
+            const servicePlan = await prisma_1.default.servicePlan.findUnique({ where: { id: servicePlanId } });
             if (!servicePlan)
                 throw new Error("Service plan not found");
             const monthlyPayment = servicePlan.monthlyFee;
@@ -828,7 +828,7 @@ const createAccount = async (req, res) => {
                         const invoiceNumber = `${prefix}${billMonth.getFullYear().toString().slice(2)}${Math.floor(Math.random() * 1e10)
                             .toString()
                             .padStart(10, "0")}`;
-                        await prisma.billing.create({
+                        await prisma_1.default.billing.create({
                             data: {
                                 clientId: result?.clientId,
                                 accountId: result?.id,
@@ -847,7 +847,7 @@ const createAccount = async (req, res) => {
                     const start = (0, date_fns_1.startOfMonth)(today);
                     const period = `${start.toLocaleString("default", { month: "long" })} ${start.getFullYear()}`;
                     const invoiceNumber = `${prefix}${today.getFullYear().toString().slice(2)}${Math.floor(Math.random() * 1e10).toString().padStart(10, '0')}`;
-                    await prisma.billing.create({
+                    await prisma_1.default.billing.create({
                         data: {
                             clientId: result?.clientId,
                             accountId: result?.id,
@@ -873,7 +873,7 @@ const createAccount = async (req, res) => {
                         .slice(2)}${Math.floor(Math.random() * 1e10)
                         .toString()
                         .padStart(10, "0")}`;
-                    await prisma.billing.create({
+                    await prisma_1.default.billing.create({
                         data: {
                             clientId: result.clientId,
                             accountId: result.id,
@@ -894,7 +894,7 @@ const createAccount = async (req, res) => {
                     const period = `Prorated`;
                     ;
                     const invoiceNumber = `${prefix}${today.getFullYear().toString().slice(2)}${Math.floor(Math.random() * 1e10).toString().padStart(10, '0')}`;
-                    await prisma.billing.create({
+                    await prisma_1.default.billing.create({
                         data: {
                             clientId: result?.clientId,
                             accountId: result?.id,
@@ -910,7 +910,7 @@ const createAccount = async (req, res) => {
                 }
             }
         }
-        const user = await prisma.user.findUnique({
+        const user = await prisma_1.default.user.findUnique({
             where: { id: userId, providerId: providerId },
             include: {
                 employee: true,
@@ -947,7 +947,7 @@ const updateClientAccount = async (req, res) => {
         return res.status(400).json({ installationDate: 'installationDate must be a valid date' });
     }
     try {
-        const updatedAccount = await prisma.$transaction(async (tx) => {
+        const updatedAccount = await prisma_1.default.$transaction(async (tx) => {
             const existingAccount = await tx.accounts.findUnique({
                 where: { id },
                 include: { odpPort: true },
@@ -1003,7 +1003,7 @@ exports.updateClientAccount = updateClientAccount;
 const deleteClientAccount = async (req, res) => {
     const { id } = req.params;
     try {
-        const account = await prisma.accounts.findUnique({
+        const account = await prisma_1.default.accounts.findUnique({
             where: {
                 id
             },
@@ -1011,13 +1011,13 @@ const deleteClientAccount = async (req, res) => {
                 odpPort: true
             }
         });
-        await prisma.accounts.delete({
+        await prisma_1.default.accounts.delete({
             where: {
                 id
             }
         });
         if (account?.odpPort) {
-            await prisma.odpPort.update({
+            await prisma_1.default.odpPort.update({
                 where: {
                     id: account.odpPort.id
                 },
@@ -1039,7 +1039,7 @@ const updateClient = async (req, res) => {
     const { id: userId, providerId } = req.user;
     const { fullName, email, phoneNumber, address, mikrotikAccount, installationDate, billingDay, status, servicePlanId, clientTypeId, coverageId } = req.body;
     try {
-        const user = await prisma.user.findUnique({
+        const user = await prisma_1.default.user.findUnique({
             where: { id: userId, providerId: providerId },
             include: {
                 employee: true,
@@ -1054,7 +1054,7 @@ const updateClient = async (req, res) => {
         if (isNaN(installDate.getTime())) {
             return res.status(400).json({ installationDate: 'installationDate must be a valid date' });
         }
-        const existingClient = await prisma.client.findUnique({
+        const existingClient = await prisma_1.default.client.findUnique({
             where: {
                 id,
                 providerId
@@ -1063,7 +1063,7 @@ const updateClient = async (req, res) => {
         if (!existingClient) {
             return res.status(404).json({ error: 'Client not found' });
         }
-        const updatedClient = await prisma.client.update({
+        const updatedClient = await prisma_1.default.client.update({
             where: {
                 id
             },
@@ -1130,7 +1130,7 @@ const deleteClient = async (req, res) => {
     const { id } = req.params;
     const { id: userId, providerId } = req.user;
     try {
-        const user = await prisma.user.findUnique({
+        const user = await prisma_1.default.user.findUnique({
             where: { id: userId, providerId: providerId },
             include: {
                 employee: true,
@@ -1141,14 +1141,14 @@ const deleteClient = async (req, res) => {
                 }
             }
         });
-        const existingClient = await prisma.client.findUnique({
+        const existingClient = await prisma_1.default.client.findUnique({
             where: { id, providerId
             }
         });
         if (!existingClient) {
             return res.status(404).json({ error: 'Unable to delete, client not found' });
         }
-        await prisma.client.delete({
+        await prisma_1.default.client.delete({
             where: {
                 id,
                 providerId
@@ -1180,7 +1180,7 @@ const getClientsPhoneNumbers = async (req, res) => {
     }
     try {
         let phoneNumbers = [];
-        const clients = await prisma.client.findMany({
+        const clients = await prisma_1.default.client.findMany({
             where: whereClause,
             select: {
                 phoneNumber: true
@@ -1208,7 +1208,7 @@ const generateSoaReport = async (req, res) => {
         const start = startDate ? new Date(startDate) : new Date("1970-01-01");
         const end = endDate ? new Date(endDate) : new Date();
         // Fetch client details with accounts, billings, payments, and discounts
-        const client = await prisma.client.findUnique({
+        const client = await prisma_1.default.client.findUnique({
             where: { id },
             include: {
                 provider: {
@@ -1305,7 +1305,7 @@ const getClientBillings = async (req, res) => {
     const { id: userId, providerId } = req.user;
     try {
         /* ================= CLIENT ================= */
-        const client = await prisma.client.findFirst({
+        const client = await prisma_1.default.client.findFirst({
             where: {
                 users: {
                     id: userId
@@ -1322,7 +1322,7 @@ const getClientBillings = async (req, res) => {
             return res.status(404).json({ message: "Client not found" });
         }
         /* ================= BILLINGS ================= */
-        const billings = await prisma.billing.findMany({
+        const billings = await prisma_1.default.billing.findMany({
             where: {
                 clientId: client.id,
             },
@@ -1340,7 +1340,7 @@ const getClientBillings = async (req, res) => {
             },
         });
         /* ================= PAYMENTS (SEPARATE) ================= */
-        const payments = await prisma.payment.findMany({
+        const payments = await prisma_1.default.payment.findMany({
             where: {
                 clientId: client.id,
             },
@@ -1404,7 +1404,7 @@ exports.getClientBillings = getClientBillings;
 const getUserTickets = async (req, res) => {
     const { id } = req.user;
     try {
-        const user = await prisma.user.findUnique({
+        const user = await prisma_1.default.user.findUnique({
             where: {
                 id
             },

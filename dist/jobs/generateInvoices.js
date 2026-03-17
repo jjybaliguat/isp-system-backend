@@ -1,19 +1,21 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateInvoices = void 0;
 const date_fns_1 = require("date-fns");
-const client_1 = require("@prisma/client");
 const date_fns_tz_1 = require("date-fns-tz");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../utils/prisma"));
 const generateInvoices = async (providerId) => {
     try {
         const today = new Date();
         const todayDay = (0, date_fns_1.getDate)(today);
-        const provider = await prisma.provider.findUnique({
+        const provider = await prisma_1.default.provider.findUnique({
             where: { id: providerId },
             select: { settings: true },
         });
-        const job = await prisma.cronJob.findFirst({
+        const job = await prisma_1.default.cronJob.findFirst({
             where: {
                 providerId,
                 type: "invoice"
@@ -36,7 +38,7 @@ const generateInvoices = async (providerId) => {
         //     }
         //   }
         // });
-        const accounts = await prisma.accounts.findMany({
+        const accounts = await prisma_1.default.accounts.findMany({
             where: {
                 client: {
                     providerId
@@ -59,7 +61,7 @@ const generateInvoices = async (providerId) => {
         const start = (0, date_fns_1.startOfMonth)(today);
         const period = (0, date_fns_1.format)(today, "MMMM yyyy");
         // Step 4: Get latest invoice number prefix
-        const latestInvoice = await prisma.billing.findFirst({
+        const latestInvoice = await prisma_1.default.billing.findFirst({
             orderBy: { createdAt: "desc" },
             select: { invoiceNumber: true },
         });
@@ -80,7 +82,7 @@ const generateInvoices = async (providerId) => {
             const startUtc = (0, date_fns_tz_1.toZonedTime)((0, date_fns_1.startOfDay)(dueDate), "Asia/Manila");
             const endUtc = (0, date_fns_tz_1.toZonedTime)((0, date_fns_1.endOfDay)(dueDate), "Asia/Manila");
             // Skip if a billing already exists
-            const existing = await prisma.billing.findFirst({
+            const existing = await prisma_1.default.billing.findFirst({
                 where: {
                     accountId: account.id,
                     dueDate: {
@@ -106,7 +108,7 @@ const generateInvoices = async (providerId) => {
         const invoices = (await Promise.all(invoicePromises)).filter(Boolean);
         // Insert all new invoices at once
         if (invoices.length > 0) {
-            await prisma.billing.createMany({
+            await prisma_1.default.billing.createMany({
                 data: invoices,
             });
         }

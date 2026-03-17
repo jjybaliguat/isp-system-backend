@@ -4,17 +4,16 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.resetPassword = exports.forgotPassword = exports.logout = exports.refresh = exports.registerController = exports.loginController = void 0;
-const client_1 = require("@prisma/client");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jwtUtils_1 = require("../../../utils/jwtUtils");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const express_async_handler_1 = __importDefault(require("express-async-handler"));
 const nodemailer_1 = __importDefault(require("nodemailer"));
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../../../utils/prisma"));
 const loginController = async (req, res) => {
     const { email, password } = req.body;
     try {
-        const user = await prisma.user.findUnique({
+        const user = await prisma_1.default.user.findUnique({
             where: { email },
             include: {
                 provider: {
@@ -45,7 +44,7 @@ const loginController = async (req, res) => {
         });
         // ---- LOG ACTION (non-blocking) ----
         if (!(user.role === "CLIENT")) {
-            prisma.log
+            prisma_1.default.log
                 .create({
                 data: {
                     action: "LOGIN",
@@ -78,7 +77,7 @@ const registerController = async (req, res) => {
         });
     }
     try {
-        const existingUser = await prisma.user.findUnique({
+        const existingUser = await prisma_1.default.user.findUnique({
             where: { email
             }
         });
@@ -86,7 +85,7 @@ const registerController = async (req, res) => {
             return res.status(400).json({ message: "Provider with the same email already exists" });
         }
         const hashedPassword = await bcryptjs_1.default.hash(password, 10);
-        await prisma.$transaction(async (tx) => {
+        await prisma_1.default.$transaction(async (tx) => {
             const newProvider = await tx.provider.create({
                 data: {
                     name,
@@ -129,7 +128,7 @@ exports.refresh = (0, express_async_handler_1.default)(async (req, res) => {
             });
             return res.status(403).json({ message: "Forbidden" });
         }
-        const foundUser = await prisma.user.findUnique({
+        const foundUser = await prisma_1.default.user.findUnique({
             where: { email: decoded.email },
         });
         if (!foundUser)
@@ -146,7 +145,7 @@ exports.refresh = (0, express_async_handler_1.default)(async (req, res) => {
 const logout = async (req, res) => {
     const cookies = req.cookies;
     const { id } = req.user;
-    const user = await prisma.user.findUnique({
+    const user = await prisma_1.default.user.findUnique({
         where: { id },
     });
     if (!user)
@@ -161,7 +160,7 @@ const logout = async (req, res) => {
     });
     // ---- LOG ACTION (non-blocking) ----
     if (!(user.role === "CLIENT")) {
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "LOGOUT",
@@ -182,7 +181,7 @@ const forgotPassword = async (req, res) => {
     if (!email)
         return res.status(400).json({ message: 'Email is required' });
     try {
-        const user = await prisma.user.findUnique({
+        const user = await prisma_1.default.user.findUnique({
             where: { email },
             include: { provider: true },
         });
@@ -242,12 +241,12 @@ const resetPassword = async (req, res) => {
             return res.status(400).json({ message: 'Invalid or expired token' });
         }
         const userId = payload.userId;
-        const user = await prisma.user.findUnique({ where: { id: userId } });
+        const user = await prisma_1.default.user.findUnique({ where: { id: userId } });
         if (!user)
             return res.status(400).json({ message: 'Invalid token' });
         const hashed = await bcryptjs_1.default.hash(password, 10);
-        await prisma.user.update({ where: { id: userId }, data: { password: hashed } });
-        prisma.log.create({
+        await prisma_1.default.user.update({ where: { id: userId }, data: { password: hashed } });
+        prisma_1.default.log.create({
             data: {
                 action: 'PASSWORD_RESET',
                 entity: 'User',

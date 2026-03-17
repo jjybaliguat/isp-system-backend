@@ -6,8 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.validateProviderXenditKey = exports.validateProviderSmsKey = exports.authenticateProvider = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const hasher_1 = require("../utils/hasher");
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../utils/prisma"));
 const authenticateProvider = (req, res, next) => {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith("Bearer ")) {
@@ -41,7 +40,7 @@ exports.authenticateProvider = authenticateProvider;
 const validateProviderSmsKey = async (req, res, next) => {
     const { providerId } = req.user;
     try {
-        const provider = await prisma.provider.findUnique({
+        const provider = await prisma_1.default.provider.findUnique({
             where: {
                 id: providerId
             },
@@ -63,7 +62,7 @@ exports.validateProviderSmsKey = validateProviderSmsKey;
 const validateProviderXenditKey = async (req, res, next) => {
     const { providerId } = req.user;
     try {
-        const provider = await prisma.provider.findUnique({
+        const provider = await prisma_1.default.provider.findUnique({
             where: {
                 id: providerId
             },

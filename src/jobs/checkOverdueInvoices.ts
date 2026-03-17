@@ -1,8 +1,6 @@
 import { addDays, startOfDay, endOfDay, subDays } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import prisma from "../utils/prisma";
 
 export const checkOverdueInvoices = async() => {
     try {

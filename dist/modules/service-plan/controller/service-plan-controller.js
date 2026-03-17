@@ -1,12 +1,14 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteServicePlan = exports.updateServicePlan = exports.createServicePlan = exports.getServicePlans = void 0;
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../../../utils/prisma"));
 const getServicePlans = async (req, res) => {
     const { providerId } = req.user;
     try {
-        const servicePlans = await prisma.servicePlan.findMany({
+        const servicePlans = await prisma_1.default.servicePlan.findMany({
             where: {
                 providerId
             },
@@ -36,7 +38,7 @@ const createServicePlan = async (req, res) => {
     if (!name || !speedMbps || !monthlyFee)
         return res.status(400).json({ message: "Missing required fields" });
     try {
-        const servicePlan = await prisma.servicePlan.create({
+        const servicePlan = await prisma_1.default.servicePlan.create({
             data: {
                 name,
                 monthlyFee,
@@ -46,7 +48,7 @@ const createServicePlan = async (req, res) => {
             }
         });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "CREATE",
@@ -70,7 +72,7 @@ const updateServicePlan = async (req, res) => {
     const { id } = req.params;
     const body = req.body;
     try {
-        const updatedPlan = await prisma.servicePlan.update({
+        const updatedPlan = await prisma_1.default.servicePlan.update({
             where: {
                 id,
                 providerId
@@ -78,7 +80,7 @@ const updateServicePlan = async (req, res) => {
             data: body
         });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "UPDATE",
@@ -101,7 +103,7 @@ const deleteServicePlan = async (req, res) => {
     const { id: userId, providerId } = req.user;
     const { id } = req.params;
     try {
-        const servicePlan = await prisma.servicePlan.findUnique({
+        const servicePlan = await prisma_1.default.servicePlan.findUnique({
             where: {
                 id,
                 providerId
@@ -109,14 +111,14 @@ const deleteServicePlan = async (req, res) => {
         });
         if (!servicePlan)
             return res.status(404).json({ message: "Service plan not found" });
-        await prisma.servicePlan.delete({
+        await prisma_1.default.servicePlan.delete({
             where: {
                 id,
                 providerId
             }
         });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "DELETE",

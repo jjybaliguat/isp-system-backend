@@ -1,18 +1,20 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendSmsWhenTheBillIsDue = void 0;
-const client_1 = require("@prisma/client");
 const hasher_1 = require("../utils/hasher");
+const prisma_1 = __importDefault(require("../utils/prisma"));
 const sendSms_1 = require("./sendSms");
 const date_fns_1 = require("date-fns");
-const prisma = new client_1.PrismaClient();
 // Maximum number of SMS to send concurrently
 const BATCH_SIZE = 5;
 const sendSmsWhenTheBillIsDue = async () => {
     try {
         const today = new Date();
         const currentDay = today.getDate();
-        const providers = await prisma.provider.findMany({
+        const providers = await prisma_1.default.provider.findMany({
             include: {
                 smsIntegrationSettings: true,
             },
@@ -21,7 +23,7 @@ const sendSmsWhenTheBillIsDue = async () => {
             const settings = provider.smsIntegrationSettings;
             if (!settings || !settings.sendWhenBillIsDue)
                 continue;
-            const accountsDue = await prisma.accounts.findMany({
+            const accountsDue = await prisma_1.default.accounts.findMany({
                 where: {
                     client: {
                         providerId: provider.id
@@ -77,7 +79,7 @@ const sendSmsWhenTheBillIsDue = async () => {
             // 2️⃣ Send SMS N days before due (reminder)
             if (settings.sendDaysBeforeDueEnabled && settings.sendDaysBeforeDueDays) {
                 const reminderDate = (0, date_fns_1.addDays)(today, settings.sendDaysBeforeDueDays);
-                const accountsReminder = await prisma.accounts.findMany({
+                const accountsReminder = await prisma_1.default.accounts.findMany({
                     where: {
                         client: {
                             providerId: provider.id

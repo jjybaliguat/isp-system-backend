@@ -6,9 +6,7 @@ import { validate as isUuid } from "uuid";
 import { decrypt } from "../../../utils/hasher";
 import { sendSms } from "../../../jobs/sendSms";
 import bcrypt from "bcryptjs";
-
-
-const prisma = new PrismaClient();
+import prisma from "../../../utils/prisma";
 
 
 export const getClients = async (req: Request, res: Response) => {

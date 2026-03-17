@@ -1,12 +1,14 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteOdpPort = exports.deleteOdp = exports.deleteOdc = exports.deleteLcp = exports.deletePonPort = exports.deleteOlt = exports.unAssignOdpPort = exports.assignOdpPort = exports.createOdpPort = exports.createOdp = exports.createOdc = exports.createLcp = exports.createPonPort = exports.createOlt = exports.getOdpPort = exports.getOdpPorts = exports.getOdps = exports.getNetworkHierarchy = void 0;
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../../utils/prisma"));
 const getNetworkHierarchy = async (req, res) => {
     const { providerId } = req.user;
     try {
-        const olts = await prisma.oLT.findMany({
+        const olts = await prisma_1.default.oLT.findMany({
             where: {
                 providerId,
             },
@@ -74,7 +76,7 @@ const getOdps = async (req, res) => {
     const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
     const { providerId } = req.user;
     try {
-        const odps = await prisma.oDP.findMany({
+        const odps = await prisma_1.default.oDP.findMany({
             where: {
                 providerId,
                 odpCode: {
@@ -95,7 +97,7 @@ const getOdpPorts = async (req, res) => {
     const odpId = typeof req.query.odpId === "string" ? req.query.odpId.trim() : "";
     const { providerId } = req.user;
     try {
-        const odpPorts = await prisma.odpPort.findMany({
+        const odpPorts = await prisma_1.default.odpPort.findMany({
             where: {
                 odp: {
                     id: odpId,
@@ -121,7 +123,7 @@ const getOdpPort = async (req, res) => {
     const accountId = typeof req.query.odpId === "string" ? req.query.odpId.trim() : "";
     const { providerId } = req.user;
     try {
-        const odpPort = await prisma.odpPort.findUnique({
+        const odpPort = await prisma_1.default.odpPort.findUnique({
             where: {
                 accountId
             }
@@ -139,7 +141,7 @@ const createOlt = async (req, res) => {
     const body = req.body;
     const { latitude, longitude, ponCount } = body;
     try {
-        const olt = await prisma.oLT.create({
+        const olt = await prisma_1.default.oLT.create({
             data: {
                 ...body,
                 latitude: Number(latitude),
@@ -152,11 +154,11 @@ const createOlt = async (req, res) => {
             portNumber: i + 1,
             oltId: olt.id,
         }));
-        await prisma.ponPort.createMany({
+        await prisma_1.default.ponPort.createMany({
             data: ponPortsData,
         });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "CREATE",
@@ -181,7 +183,7 @@ const createPonPort = async (req, res) => {
     const { oltId } = body;
     const { portNumber } = body;
     try {
-        const isPonPortExists = await prisma.ponPort.findFirst({
+        const isPonPortExists = await prisma_1.default.ponPort.findFirst({
             where: {
                 portNumber: Number(portNumber),
                 oltId
@@ -189,14 +191,14 @@ const createPonPort = async (req, res) => {
         });
         if (isPonPortExists)
             return res.status(400).json({ message: `Pon port number ${portNumber} already exists` });
-        const ponPort = await prisma.ponPort.create({
+        const ponPort = await prisma_1.default.ponPort.create({
             data: {
                 ...body,
                 portNumber: Number(portNumber)
             }
         });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "CREATE",
@@ -222,12 +224,12 @@ const createLcp = async (req, res) => {
     const lat = Number(latitude);
     const lng = Number(longitude);
     try {
-        const ponPort = await prisma.ponPort.findUnique({
+        const ponPort = await prisma_1.default.ponPort.findUnique({
             where: {
                 id: ponPortId
             }
         });
-        const lcp = await prisma.lCP.create({
+        const lcp = await prisma_1.default.lCP.create({
             data: {
                 ...body,
                 latitude: lat,
@@ -238,7 +240,7 @@ const createLcp = async (req, res) => {
             }
         });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "CREATE",
@@ -264,7 +266,7 @@ const createOdc = async (req, res) => {
     const lat = Number(latitude);
     const lng = Number(longitude);
     try {
-        const odc = await prisma.oDC.create({
+        const odc = await prisma_1.default.oDC.create({
             data: {
                 ...body,
                 latitude: lat,
@@ -273,7 +275,7 @@ const createOdc = async (req, res) => {
             }
         });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "CREATE",
@@ -301,17 +303,17 @@ const createOdp = async (req, res) => {
     const lng = Number(longitude);
     const count = Number(portCount);
     try {
-        const lcp = await prisma.lCP.findUnique({
+        const lcp = await prisma_1.default.lCP.findUnique({
             where: {
                 id: lcpId
             }
         });
-        const odc = await prisma.oDC.findUnique({
+        const odc = await prisma_1.default.oDC.findUnique({
             where: {
                 id: odcId
             }
         });
-        const odp = await prisma.oDP.create({
+        const odp = await prisma_1.default.oDP.create({
             data: {
                 ...body,
                 odcId: odc ? odc.id : undefined,
@@ -326,11 +328,11 @@ const createOdp = async (req, res) => {
             portNumber: i + 1,
             odpId: odp.id,
         }));
-        await prisma.odpPort.createMany({
+        await prisma_1.default.odpPort.createMany({
             data: portsData,
         });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "CREATE",
@@ -353,7 +355,7 @@ const createOdpPort = async (req, res) => {
     const { portNumber, odpId } = req.body;
     const { id: userId, providerId } = req.user;
     try {
-        const isPortExist = await prisma.odpPort.findFirst({
+        const isPortExist = await prisma_1.default.odpPort.findFirst({
             where: {
                 portNumber: Number(portNumber),
                 odpId
@@ -362,14 +364,14 @@ const createOdpPort = async (req, res) => {
         if (isPortExist) {
             return res.status(400).json({ message: `Odp Port ${portNumber} already exists.` });
         }
-        const odpPort = await prisma.odpPort.create({
+        const odpPort = await prisma_1.default.odpPort.create({
             data: {
                 portNumber: Number(portNumber),
                 odpId
             }
         });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "CREATE",
@@ -392,7 +394,7 @@ const assignOdpPort = async (req, res) => {
     const { accountId, portId } = req.body;
     const { id: userId, providerId } = req.user;
     try {
-        const account = await prisma.accounts.findUnique({
+        const account = await prisma_1.default.accounts.findUnique({
             where: {
                 id: accountId
             },
@@ -406,7 +408,7 @@ const assignOdpPort = async (req, res) => {
         });
         if (!account)
             return res.status(400).json({ message: "Client not found." });
-        const odpPort = await prisma.odpPort.update({
+        const odpPort = await prisma_1.default.odpPort.update({
             where: {
                 id: portId
             },
@@ -423,7 +425,7 @@ const assignOdpPort = async (req, res) => {
             }
         });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "ASSIGN",
@@ -446,7 +448,7 @@ const unAssignOdpPort = async (req, res) => {
     const { accountId } = req.body;
     const { id: userId, providerId } = req.user;
     try {
-        const odpPort = await prisma.odpPort.findUnique({
+        const odpPort = await prisma_1.default.odpPort.findUnique({
             where: {
                 accountId
             },
@@ -461,7 +463,7 @@ const unAssignOdpPort = async (req, res) => {
         if (!odpPort) {
             return res.status(400).json({ message: "ODP Port not found." });
         }
-        const odpPortUpdated = await prisma.odpPort.update({
+        const odpPortUpdated = await prisma_1.default.odpPort.update({
             where: {
                 accountId
             },
@@ -479,7 +481,7 @@ const unAssignOdpPort = async (req, res) => {
             }
         });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "UNASSIGN",
@@ -501,7 +503,7 @@ exports.unAssignOdpPort = unAssignOdpPort;
 const deleteOlt = async (req, res) => {
     const { id } = req.params;
     try {
-        await prisma.oLT.delete({
+        await prisma_1.default.oLT.delete({
             where: {
                 id
             }
@@ -517,7 +519,7 @@ exports.deleteOlt = deleteOlt;
 const deletePonPort = async (req, res) => {
     const { id } = req.params;
     try {
-        await prisma.ponPort.delete({
+        await prisma_1.default.ponPort.delete({
             where: {
                 id
             }
@@ -533,7 +535,7 @@ exports.deletePonPort = deletePonPort;
 const deleteLcp = async (req, res) => {
     const { id } = req.params;
     try {
-        await prisma.lCP.delete({
+        await prisma_1.default.lCP.delete({
             where: {
                 id
             }
@@ -549,7 +551,7 @@ exports.deleteLcp = deleteLcp;
 const deleteOdc = async (req, res) => {
     const { id } = req.params;
     try {
-        await prisma.oDC.delete({
+        await prisma_1.default.oDC.delete({
             where: {
                 id
             }
@@ -565,7 +567,7 @@ exports.deleteOdc = deleteOdc;
 const deleteOdp = async (req, res) => {
     const { id } = req.params;
     try {
-        await prisma.oDP.delete({
+        await prisma_1.default.oDP.delete({
             where: {
                 id
             }
@@ -582,7 +584,7 @@ const deleteOdpPort = async (req, res) => {
     const { id } = req.params;
     console.log(id);
     try {
-        await prisma.odpPort.delete({
+        await prisma_1.default.odpPort.delete({
             where: {
                 id
             }

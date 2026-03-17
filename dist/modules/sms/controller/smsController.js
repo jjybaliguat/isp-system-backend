@@ -1,8 +1,10 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendSms = exports.getSms = void 0;
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../../../utils/prisma"));
 const getSms = async (req, res) => {
     const smsKey = req.smsKey;
     // const page = Number(req.query.page) || 1;
@@ -53,7 +55,7 @@ const sendSms = async (req, res) => {
         if (data.apikey)
             return res.status(400).json({ message: "Invalid Api Key" });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "SEND_SMS",

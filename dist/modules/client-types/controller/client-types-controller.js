@@ -1,15 +1,17 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.updatedClientType = exports.deleteClientType = exports.createClientType = exports.getClientTypes = void 0;
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../../../utils/prisma"));
 const getClientTypes = async (req, res) => {
     const { providerId } = req.user;
     if (!providerId) {
         return res.status(401).json({ message: "Unauthorized" });
     }
     try {
-        const clientTypes = await prisma.clientType.findMany({
+        const clientTypes = await prisma_1.default.clientType.findMany({
             where: {
                 providerId
             }
@@ -26,14 +28,14 @@ const createClientType = async (req, res) => {
     const { id: userId, providerId } = req.user;
     const { name } = req.body;
     try {
-        const clientType = await prisma.clientType.create({
+        const clientType = await prisma_1.default.clientType.create({
             data: {
                 name,
                 providerId
             }
         });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "CREATE",
@@ -56,7 +58,7 @@ const deleteClientType = async (req, res) => {
     const { id: userId, providerId } = req.user;
     const { id } = req.params;
     try {
-        const clientType = await prisma.clientType.findUnique({
+        const clientType = await prisma_1.default.clientType.findUnique({
             where: {
                 id,
                 providerId
@@ -65,14 +67,14 @@ const deleteClientType = async (req, res) => {
         if (!clientType) {
             return res.status(404).json({ message: "Client type not found" });
         }
-        await prisma.clientType.delete({
+        await prisma_1.default.clientType.delete({
             where: {
                 id,
                 providerId
             }
         });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "DELETE",
@@ -96,7 +98,7 @@ const updatedClientType = async (req, res) => {
     const { name } = req.body;
     const { id: userId, providerId } = req.user;
     try {
-        const updatedClientType = await prisma.clientType.update({
+        const updatedClientType = await prisma_1.default.clientType.update({
             where: {
                 id,
                 providerId
@@ -106,7 +108,7 @@ const updatedClientType = async (req, res) => {
             }
         });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "UPDATE",

@@ -9,8 +9,7 @@ import { decrypt } from "../../../utils/hasher";
 import { sendPaymentConfirmation } from "../../../jobs/sendPaymentConfirmation";
 import { sendSms } from "../../../jobs/sendSms";
 import { emailIsConfigured } from "../../../helpers/emailIsConfirgured";
-
-const prisma = new PrismaClient();
+import prisma from "../../../utils/prisma";
 
 export const createBilling = async (req: Request, res: Response) => {
     const {

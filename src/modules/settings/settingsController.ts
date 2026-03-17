@@ -1,8 +1,7 @@
 import { Request, Response } from 'express';
 import { registerTenantJobs, unregisterTenantJobs } from '../../jobs/jobManager';
 import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import prisma from '../../utils/prisma';
 
 export const updateNotificationsSettings = async (req: Request, res: Response) => {
   const { enabled, emailUser, emailPass, emailHost, emailPort, senderName, invoiceReminderTemplate, paymentConfirmationTemplate, overdueNoticeTemplate } = req.body;

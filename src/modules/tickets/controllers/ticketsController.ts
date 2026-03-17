@@ -4,9 +4,7 @@ import path from "path";
 import fs from "fs";
 import { upload } from "../../../middlewares/imageSizeLimiter";
 import multer from "multer";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import prisma from "../../../utils/prisma";
 
 export const getTickets = async (req: Request, res: Response) => {
     const page = Number(req.query.page) || 1;

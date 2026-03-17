@@ -1,12 +1,14 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteCoverage = exports.updateCoverage = exports.createCoverage = exports.getCoverage = void 0;
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../../../utils/prisma"));
 const getCoverage = async (req, res) => {
     const { providerId } = req.user;
     try {
-        const coverage = await prisma.coverage.findMany({
+        const coverage = await prisma_1.default.coverage.findMany({
             where: {
                 providerId
             },
@@ -33,7 +35,7 @@ const createCoverage = async (req, res) => {
         return res.status(400).json({ message: "Missing required fields" });
     const { id: userId, providerId } = req.user;
     try {
-        const coverage = await prisma.coverage.create({
+        const coverage = await prisma_1.default.coverage.create({
             data: {
                 name,
                 latitude,
@@ -43,7 +45,7 @@ const createCoverage = async (req, res) => {
             }
         });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "CREATE",
@@ -67,7 +69,7 @@ const updateCoverage = async (req, res) => {
     const body = req.body;
     const { id: userId, providerId } = req.user;
     try {
-        const updatedCoverage = await prisma.coverage.update({
+        const updatedCoverage = await prisma_1.default.coverage.update({
             where: {
                 id,
                 providerId
@@ -75,7 +77,7 @@ const updateCoverage = async (req, res) => {
             data: body
         });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "UPDATE",
@@ -98,7 +100,7 @@ const deleteCoverage = async (req, res) => {
     const { id } = req.params;
     const { id: userId, providerId } = req.user;
     try {
-        const coverage = await prisma.coverage.findUnique({
+        const coverage = await prisma_1.default.coverage.findUnique({
             where: {
                 id
             }
@@ -106,13 +108,13 @@ const deleteCoverage = async (req, res) => {
         if (!coverage) {
             return res.status(404).json({ message: "Coverage not found" });
         }
-        await prisma.coverage.delete({
+        await prisma_1.default.coverage.delete({
             where: {
                 id
             }
         });
         // ---- LOG ACTION (non-blocking) ----
-        prisma.log
+        prisma_1.default.log
             .create({
             data: {
                 action: "DELETE",

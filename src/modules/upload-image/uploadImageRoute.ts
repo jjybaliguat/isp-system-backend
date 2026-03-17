@@ -5,10 +5,6 @@ import fs from "fs";
 import { authenticateProvider } from "../../middlewares/authMiddleware";
 import { upload } from "../../middlewares/imageSizeLimiter";
 
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
-
 const router = express.Router();
 
 

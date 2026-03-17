@@ -1,8 +1,7 @@
 import { addMonths, startOfMonth, endOfMonth, addDays, format, getDate, startOfDay, endOfDay } from "date-fns";
-import { Prisma, PrismaClient } from "@prisma/client";
 import { toZonedTime } from "date-fns-tz";
-
-const prisma = new PrismaClient();
+import prisma from "../utils/prisma";
+import { Prisma } from "@prisma/client";
 
 export const generateInvoices = async (providerId: string) => {
 

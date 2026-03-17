@@ -7,13 +7,12 @@ exports.upload = void 0;
 const multer_1 = __importDefault(require("multer"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../utils/prisma"));
 const storage = multer_1.default.diskStorage({
     destination: async (req, _file, cb) => {
         try {
             const { providerId } = req.user;
-            const provider = await prisma.provider.findUnique({
+            const provider = await prisma_1.default.provider.findUnique({
                 where: { id: providerId },
                 select: { companyName: true },
             });

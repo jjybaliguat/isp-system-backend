@@ -1,10 +1,12 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getFinanceAnalytics = void 0;
-const client_1 = require("@prisma/client");
 const date_fns_1 = require("date-fns");
 const getTimeOffset_1 = require("../../../utils/getTimeOffset");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../../../utils/prisma"));
 const getFinanceAnalytics = async (req, res) => {
     const { providerId } = req.user;
     const { year, month } = req.query;
@@ -20,7 +22,7 @@ const getFinanceAnalytics = async (req, res) => {
     const yearEnd = (0, date_fns_1.endOfYear)(new Date(year === "" ? now.getFullYear() : resolvedYear, 0, 1));
     try {
         // --- 1. REVENUE METRICS ---
-        const totalMonthly = await prisma.payment.aggregate({
+        const totalMonthly = await prisma_1.default.payment.aggregate({
             _sum: { amount: true },
             where: {
                 client: { providerId },
@@ -28,7 +30,7 @@ const getFinanceAnalytics = async (req, res) => {
                 paidAt: { gte: monthStart, lte: monthEnd },
             },
         });
-        const paymentss = await prisma.payment.findMany({
+        const paymentss = await prisma_1.default.payment.findMany({
             where: {
                 client: { providerId },
                 status: "PAID",
@@ -36,7 +38,7 @@ const getFinanceAnalytics = async (req, res) => {
             },
         });
         console.log("Payments in year:", paymentss.length);
-        const totalYTD = await prisma.payment.aggregate({
+        const totalYTD = await prisma_1.default.payment.aggregate({
             _sum: { amount: true },
             where: {
                 client: { providerId },
@@ -45,7 +47,7 @@ const getFinanceAnalytics = async (req, res) => {
             },
         });
         // Group revenue by service plan
-        const revenueByService = await prisma.payment.groupBy({
+        const revenueByService = await prisma_1.default.payment.groupBy({
             where: { account: { client: { providerId } }, status: "PAID",
                 paidAt: { gte: month !== "" ? monthStart : yearStart, lte: month !== "" ? monthEnd : yearEnd },
             },
@@ -54,7 +56,7 @@ const getFinanceAnalytics = async (req, res) => {
         });
         const byServiceType = [];
         for (const r of revenueByService) {
-            const account = await prisma.accounts.findUnique({
+            const account = await prisma_1.default.accounts.findUnique({
                 where: { id: r.accountId },
                 include: { servicePlan: true },
             });
@@ -71,7 +73,7 @@ const getFinanceAnalytics = async (req, res) => {
         for (let i = 0; i < 12; i++) {
             const from = (0, date_fns_1.startOfMonth)((0, date_fns_1.subMonths)(now, i));
             const to = (0, date_fns_1.endOfMonth)((0, date_fns_1.subMonths)(now, i));
-            const result = await prisma.payment.aggregate({
+            const result = await prisma_1.default.payment.aggregate({
                 _sum: { amount: true },
                 where: { client: { providerId }, status: "PAID", paidAt: { gte: from, lte: to } },
             });
@@ -80,7 +82,7 @@ const getFinanceAnalytics = async (req, res) => {
                 revenue: Number(result._sum.amount || 0),
             });
         }
-        const totalClients = await prisma.client.count({ where: { providerId } });
+        const totalClients = await prisma_1.default.client.count({ where: { providerId } });
         const avgPerClient = totalClients > 0 ? Number(totalYTD._sum.amount || 0) / totalClients : 0;
         // --- 2. BILLING METRICS ---
         const dueDateFilter = {
@@ -90,34 +92,34 @@ const getFinanceAnalytics = async (req, res) => {
             }
         };
         const [totalInvoices, paid, pending, overdue, partialPayments] = await Promise.all([
-            prisma.billing.count({
+            prisma_1.default.billing.count({
                 where: {
                     client: { providerId },
                     ...dueDateFilter,
                 },
             }),
-            prisma.billing.count({
+            prisma_1.default.billing.count({
                 where: {
                     client: { providerId },
                     status: "PAID",
                     ...dueDateFilter,
                 },
             }),
-            prisma.billing.count({
+            prisma_1.default.billing.count({
                 where: {
                     client: { providerId },
                     status: "PENDING",
                     ...dueDateFilter,
                 },
             }),
-            prisma.billing.count({
+            prisma_1.default.billing.count({
                 where: {
                     client: { providerId },
                     status: "OVERDUE",
                     ...dueDateFilter,
                 },
             }),
-            prisma.billing.count({
+            prisma_1.default.billing.count({
                 where: {
                     client: { providerId },
                     status: "PARTIALLY_PAID",
@@ -125,7 +127,7 @@ const getFinanceAnalytics = async (req, res) => {
                 },
             }),
         ]);
-        const overdueClientsRaw = await prisma.billing.findMany({
+        const overdueClientsRaw = await prisma_1.default.billing.findMany({
             where: { client: { providerId }, status: "OVERDUE" },
             include: { client: true },
         });
@@ -135,7 +137,7 @@ const getFinanceAnalytics = async (req, res) => {
             daysOverdue: Math.floor((now.getTime() - b.dueDate.getTime()) / (1000 * 60 * 60 * 24)),
         }));
         // --- 3. ACCOUNTS RECEIVABLE ---
-        const totalOutstandingData = await prisma.billing.findMany({
+        const totalOutstandingData = await prisma_1.default.billing.findMany({
             where: {
                 client: { providerId },
                 status: { in: ["OVERDUE", "PARTIALLY_PAID", "PENDING"] },
@@ -155,7 +157,7 @@ const getFinanceAnalytics = async (req, res) => {
             { label: "Not yet due", min: Number.MIN_SAFE_INTEGER, max: -1 },
         ];
         const aging = await Promise.all(agingBuckets.map(async (bucket) => {
-            const bills = await prisma.billing.findMany({
+            const bills = await prisma_1.default.billing.findMany({
                 where: {
                     client: { providerId },
                     status: { in: ["OVERDUE", "PARTIALLY_PAID", "PENDING"] },
@@ -168,7 +170,7 @@ const getFinanceAnalytics = async (req, res) => {
             const amount = filtered.reduce((sum, b) => sum + (b.amount - (b.paidAmount || 0)), 0);
             return { range: bucket.label, amount, count: filtered.length };
         }));
-        const topDebtorsRaw = await prisma.client.findMany({
+        const topDebtorsRaw = await prisma_1.default.client.findMany({
             where: {
                 providerId
             },
@@ -184,7 +186,7 @@ const getFinanceAnalytics = async (req, res) => {
             .sort((a, b) => b.amount - a.amount)
             .slice(0, 10);
         // --- 4. PAYMENT METHODS & COLLECTIONS ---
-        const payments = await prisma.payment.findMany({
+        const payments = await prisma_1.default.payment.findMany({
             where: {
                 client: { providerId },
                 status: "PAID",
@@ -209,7 +211,7 @@ const getFinanceAnalytics = async (req, res) => {
         for (let i = 0; i < 12; i++) {
             const from = (0, date_fns_1.startOfMonth)((0, date_fns_1.subMonths)(now, i));
             const to = (0, date_fns_1.endOfMonth)((0, date_fns_1.subMonths)(now, i));
-            const result = await prisma.payment.aggregate({
+            const result = await prisma_1.default.payment.aggregate({
                 _sum: { amount: true },
                 where: { client: { providerId }, status: "PAID", paidAt: { gte: from, lte: to } },
             });
@@ -218,7 +220,7 @@ const getFinanceAnalytics = async (req, res) => {
                 amount: Number(result._sum.amount || 0),
             });
         }
-        const failedTransactions = await prisma.payment.count({
+        const failedTransactions = await prisma_1.default.payment.count({
             where: { client: { providerId }, status: { in: ["FAILED", "EXPIRED", "CANCELLED"] } },
         });
         // --- 5. DISCOUNTS, REFUNDS, WRITE-OFFS ---
@@ -227,7 +229,7 @@ const getFinanceAnalytics = async (req, res) => {
         const writeOffs = 0;
         // --- 6. CUSTOMER METRICS ---
         const lifetimeValue = avgPerClient * 12;
-        const churnedClients = await prisma.client.count({ where: { providerId, status: "TERMINATED" } });
+        const churnedClients = await prisma_1.default.client.count({ where: { providerId, status: "TERMINATED" } });
         const churnedWithBalance = {
             count: churnedClients,
             totalBalance: topDebtorsRaw
@@ -238,7 +240,7 @@ const getFinanceAnalytics = async (req, res) => {
         for (let i = 0; i < 12; i++) {
             const from = (0, date_fns_1.startOfMonth)((0, date_fns_1.subMonths)(now, i));
             const to = (0, date_fns_1.endOfMonth)((0, date_fns_1.subMonths)(now, i));
-            const newCount = await prisma.client.count({
+            const newCount = await prisma_1.default.client.count({
                 where: { providerId, createdAt: { gte: from, lte: to } },
             });
             const returningCount = Math.max(0, totalClients - newCount);

@@ -2,9 +2,7 @@ import express, { Request, Response } from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import prisma from "../utils/prisma";
 
 const storage = multer.diskStorage({
   destination: async (req: Request, _file, cb) => {

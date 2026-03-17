@@ -5,7 +5,7 @@ import { generateToken } from '../../../utils/jwtUtils';
 import jwt from 'jsonwebtoken'
 import asyncHandler from 'express-async-handler'
 import nodemailer from 'nodemailer';
-const prisma = new PrismaClient();
+import prisma from '../../../utils/prisma';
 
 export const loginController = async (req: Request, res: Response) => {
     const { email, password } = req.body;

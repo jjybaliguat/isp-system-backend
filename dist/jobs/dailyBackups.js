@@ -5,15 +5,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.scheduleDailyBackups = scheduleDailyBackups;
 const node_cron_1 = __importDefault(require("node-cron"));
-const client_1 = require("@prisma/client");
 const backupController_1 = require("../modules/admin/controller/backupController");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../utils/prisma"));
 function scheduleDailyBackups() {
     // run at 02:30 AM Asia/Manila daily
     node_cron_1.default.schedule('30 2 * * *', async () => {
         console.log('Running daily backup job:', new Date().toLocaleString());
         try {
-            const providers = await prisma.provider.findMany({ where: { dailyBackup: true }, select: { id: true } });
+            const providers = await prisma_1.default.provider.findMany({ where: { dailyBackup: true }, select: { id: true } });
             for (const p of providers) {
                 try {
                     const { zipPath, zipFilename, when } = await (0, backupController_1.createBackupZipForProvider)(p.id);

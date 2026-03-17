@@ -1,8 +1,10 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getPPPoEHistory = exports.getActivePPPoEAccounts = void 0;
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../../utils/prisma"));
 const getActivePPPoEAccounts = async (req, res) => {
     const { id, providerId } = req.user;
     const page = Number(req.query.page) || 1;
@@ -10,7 +12,7 @@ const getActivePPPoEAccounts = async (req, res) => {
     const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
     const offset = (page - 1) * limit;
     try {
-        const provider = await prisma.provider.findUnique({
+        const provider = await prisma_1.default.provider.findUnique({
             where: {
                 id: providerId,
                 providerType: "MAIN",
@@ -32,19 +34,19 @@ const getActivePPPoEAccounts = async (req, res) => {
             }
             : {};
         const [usernames, total] = await Promise.all([
-            prisma.pppoeBandwidth.findMany({
+            prisma_1.default.pppoeBandwidth.findMany({
                 where,
                 distinct: ["username"],
                 select: { username: true },
                 skip: offset,
                 take: limit,
             }),
-            prisma.pppoeBandwidth.groupBy({
+            prisma_1.default.pppoeBandwidth.groupBy({
                 by: ["username"],
                 where,
             }),
         ]);
-        const latestRecords = await prisma.pppoeBandwidth.findMany({
+        const latestRecords = await prisma_1.default.pppoeBandwidth.findMany({
             where: {
                 username: {
                     in: usernames.map((u) => u.username),
@@ -88,7 +90,7 @@ const getPPPoEHistory = async (req, res) => {
         const to = req.query.to
             ? new Date(req.query.to)
             : new Date();
-        const data = await prisma.pppoeBandwidth.findMany({
+        const data = await prisma_1.default.pppoeBandwidth.findMany({
             where: {
                 username,
                 recordedAt: {

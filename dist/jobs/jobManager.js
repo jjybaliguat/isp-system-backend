@@ -32,14 +32,16 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerTenantJobs = registerTenantJobs;
 exports.unregisterTenantJobs = unregisterTenantJobs;
 const cron = __importStar(require("node-cron"));
 const generateInvoices_1 = require("./generateInvoices");
 const sendInvoiceReminders_1 = require("./sendInvoiceReminders");
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../utils/prisma"));
 const jobRegistry = {};
 async function registerTenantJobs(providerId, providerName) {
     // clean existing
@@ -67,7 +69,7 @@ async function registerTenantJobs(providerId, providerName) {
         job.start();
         jobRegistry[key] = job;
         // store to DB
-        await prisma.cronJob.upsert({
+        await prisma_1.default.cronJob.upsert({
             where: { providerId_type: { providerId, type } },
             update: { schedule, isActive: true },
             create: { providerId, providerName, schedule, type },
@@ -81,7 +83,7 @@ async function unregisterTenantJobs(providerId) {
     reminderJob?.stop();
     delete jobRegistry[providerId];
     delete jobRegistry[`${providerId}-reminder`];
-    await prisma.cronJob.updateMany({
+    await prisma_1.default.cronJob.updateMany({
         where: { providerId },
         data: { isActive: false },
     });

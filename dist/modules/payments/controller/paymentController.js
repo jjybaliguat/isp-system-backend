@@ -1,11 +1,13 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.xenditWebhook = exports.createPayment = exports.getPayment = exports.getPayments = void 0;
 const xendit_node_1 = require("xendit-node");
 const hasher_1 = require("../../../utils/hasher");
-const client_1 = require("@prisma/client");
 const sendSms_1 = require("../../../jobs/sendSms");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../../../utils/prisma"));
 const getPayments = async (req, res) => {
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 10;
@@ -54,7 +56,7 @@ const getPayments = async (req, res) => {
             ];
         }
         const [payments, total] = await Promise.all([
-            prisma.payment.findMany({
+            prisma_1.default.payment.findMany({
                 where: whereClause,
                 include: {
                     client: {
@@ -87,7 +89,7 @@ const getPayments = async (req, res) => {
                 skip,
                 take: limit,
             }),
-            prisma.payment.count({ where: whereClause }),
+            prisma_1.default.payment.count({ where: whereClause }),
         ]);
         return res.status(200).json({
             data: payments,
@@ -108,7 +110,7 @@ exports.getPayments = getPayments;
 const getPayment = async (req, res) => {
     const { id } = req.params;
     try {
-        const payment = await prisma.payment.findUnique({
+        const payment = await prisma_1.default.payment.findUnique({
             where: { id },
             include: {
                 client: {
@@ -152,14 +154,14 @@ exports.getPayment = getPayment;
 const createPayment = async (req, res) => {
     const { billingId } = req.params;
     try {
-        const billing = await prisma.billing.findUnique({
+        const billing = await prisma_1.default.billing.findUnique({
             where: { id: billingId },
             include: { client: true },
         });
         if (!billing) {
             return res.status(404).json({ error: "Billing not found" });
         }
-        const provider = await prisma.provider.findUnique({
+        const provider = await prisma_1.default.provider.findUnique({
             where: {
                 id: billing.client.providerId
             }
@@ -179,7 +181,7 @@ const createPayment = async (req, res) => {
                 message: "Billing already fully paid",
             });
         }
-        const existingPayment = await prisma.payment.findFirst({
+        const existingPayment = await prisma_1.default.payment.findFirst({
             where: {
                 billingId,
                 paymentMethod: "XENDIT",
@@ -197,7 +199,7 @@ const createPayment = async (req, res) => {
         }
         // ❌ Invalidate old pending payment if amount mismatch
         if (existingPayment) {
-            await prisma.payment.update({
+            await prisma_1.default.payment.update({
                 where: { id: existingPayment.id },
                 data: {
                     status: "CANCELLED",
@@ -220,7 +222,7 @@ const createPayment = async (req, res) => {
             }
         });
         // Create Payment record in DB
-        const payment = await prisma.payment.create({
+        const payment = await prisma_1.default.payment.create({
             data: {
                 billingId: billing.id,
                 clientId: billing.clientId,
@@ -241,7 +243,7 @@ const createPayment = async (req, res) => {
     catch (error) {
         // 🛡️ HANDLE DUPLICATE RACE CONDITION
         if (error.code === "P2002") {
-            const payment = await prisma.payment.findFirst({
+            const payment = await prisma_1.default.payment.findFirst({
                 where: {
                     billingId,
                     paymentMethod: "XENDIT",
@@ -287,7 +289,7 @@ const xenditWebhook = async (req, res) => {
         }
     }
     try {
-        const payment = await prisma.payment.findUnique({ where: { xenditInvoiceId } });
+        const payment = await prisma_1.default.payment.findUnique({ where: { xenditInvoiceId } });
         if (!payment) {
             // Gateway behavior: forward to legacy webhook URL if payment not found locally
             const forwardUrl = 'https://sierracommunication.com/xendit/payinvoice';
@@ -359,7 +361,7 @@ const xenditWebhook = async (req, res) => {
         }
         switch (status) {
             case "EXPIRED": {
-                await prisma.payment.update({
+                await prisma_1.default.payment.update({
                     where: { xenditInvoiceId },
                     data: {
                         status: "EXPIRED",
@@ -369,7 +371,7 @@ const xenditWebhook = async (req, res) => {
                 return res.status(200).json({ message: "Payment expired" });
             }
             case "FAILED": {
-                await prisma.payment.update({
+                await prisma_1.default.payment.update({
                     where: { xenditInvoiceId },
                     data: {
                         status: "FAILED",
@@ -379,7 +381,7 @@ const xenditWebhook = async (req, res) => {
                 return res.status(200).json({ message: "Payment failed" });
             }
             case "CANCELLED": {
-                await prisma.payment.update({
+                await prisma_1.default.payment.update({
                     where: { xenditInvoiceId },
                     data: {
                         status: "CANCELLED",
@@ -404,7 +406,7 @@ const xenditWebhook = async (req, res) => {
                 message: "Missing paid payment details",
             });
         }
-        const updatedPayment = await prisma.payment.update({
+        const updatedPayment = await prisma_1.default.payment.update({
             where: { xenditInvoiceId },
             data: {
                 status: "PAID",
@@ -428,7 +430,7 @@ const xenditWebhook = async (req, res) => {
         // ─────────────────────────────────────────────
         // 6️⃣ Update billing totals (PAID only)
         // ─────────────────────────────────────────────
-        const billing = await prisma.billing.findUnique({
+        const billing = await prisma_1.default.billing.findUnique({
             where: { id: updatedPayment.billingId },
             include: {
                 payments: { where: { status: "PAID" } },
@@ -439,7 +441,7 @@ const xenditWebhook = async (req, res) => {
         }
         const totalPaid = billing.payments.reduce((sum, p) => sum + Number(p.amount), 0);
         const cappedPaidAmount = Math.min(totalPaid, billing.amount);
-        await prisma.billing.update({
+        await prisma_1.default.billing.update({
             where: { id: billing.id },
             data: {
                 paidAmount: cappedPaidAmount,

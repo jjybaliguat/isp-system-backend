@@ -1,8 +1,10 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getLogs = void 0;
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../../utils/prisma"));
 const getLogs = async (req, res) => {
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 10;
@@ -42,7 +44,7 @@ const getLogs = async (req, res) => {
             whereClause.entity = entity;
         }
         const [data, total] = await Promise.all([
-            prisma.log.findMany({
+            prisma_1.default.log.findMany({
                 where: whereClause,
                 include: {
                     user: {
@@ -61,7 +63,7 @@ const getLogs = async (req, res) => {
                 skip,
                 take: limit,
             }),
-            prisma.log.count({
+            prisma_1.default.log.count({
                 where: whereClause
             })
         ]);

@@ -1,9 +1,6 @@
 import { Request, Response } from 'express';
 import bcrypt from "bcryptjs";
-
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import prisma from '../../../utils/prisma';
 
 export const getUsers = async (req: Request, res: Response) => {
     const {providerId} = req.user;

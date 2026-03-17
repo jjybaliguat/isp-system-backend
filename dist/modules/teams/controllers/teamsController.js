@@ -1,12 +1,14 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateTeam = exports.deleteTeam = exports.createTeam = exports.getTeams = void 0;
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../../../utils/prisma"));
 const getTeams = async (req, res) => {
     const { providerId } = req.user;
     try {
-        const teams = await prisma.employeesTeam.findMany({
+        const teams = await prisma_1.default.employeesTeam.findMany({
             where: {
                 providerId
             },
@@ -31,7 +33,7 @@ const createTeam = async (req, res) => {
     const { teamName } = req.body;
     const { providerId } = req.user;
     try {
-        const newTeam = await prisma.employeesTeam.create({
+        const newTeam = await prisma_1.default.employeesTeam.create({
             data: {
                 name: teamName,
                 providerId
@@ -49,7 +51,7 @@ const deleteTeam = async (req, res) => {
     const { id } = req.params;
     const { id: userId, providerId } = req.user;
     try {
-        await prisma.employeesTeam.delete({
+        await prisma_1.default.employeesTeam.delete({
             where: {
                 id,
                 providerId
@@ -69,7 +71,7 @@ const updateTeam = async (req, res) => {
     const { teamName } = req.body;
     const { providerId } = req.user;
     try {
-        const updateTeam = await prisma.employeesTeam.update({
+        const updateTeam = await prisma_1.default.employeesTeam.update({
             where: {
                 id,
                 providerId

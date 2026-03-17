@@ -5,8 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import nodemailer from 'nodemailer';
 import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../../../utils/prisma';
 
 // Stream a pg_dump plain SQL into a zip, send to client and optionally email to provider
 export const downloadDatabaseBackup = async (req: Request, res: Response) => {

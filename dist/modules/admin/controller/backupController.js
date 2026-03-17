@@ -11,8 +11,7 @@ const archiver_1 = __importDefault(require("archiver"));
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const nodemailer_1 = __importDefault(require("nodemailer"));
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = __importDefault(require("../../../utils/prisma"));
 // Stream a pg_dump plain SQL into a zip, send to client and optionally email to provider
 const downloadDatabaseBackup = async (req, res) => {
     const { role, providerId } = req.user;
@@ -56,7 +55,7 @@ const downloadDatabaseBackup = async (req, res) => {
         const now = new Date();
         const sqlFilename = `backup-${now.toISOString().slice(0, 10)}-db.sql`;
         const zipFilename = `backup-${now.toISOString().slice(0, 10)}-db.zip`;
-        const providerDirName = (await prisma.provider.findUnique({ where: { id: providerId }, select: { companyName: true } }))?.companyName?.trim().replace(/\s+/g, '_') || providerId;
+        const providerDirName = (await prisma_1.default.provider.findUnique({ where: { id: providerId }, select: { companyName: true } }))?.companyName?.trim().replace(/\s+/g, '_') || providerId;
         const backupDir = path_1.default.join(process.cwd(), 'uploads', 'backups', providerDirName);
         if (!fs_1.default.existsSync(backupDir))
             fs_1.default.mkdirSync(backupDir, { recursive: true });
@@ -160,7 +159,7 @@ exports.default = {};
 // Exported helper: send the backup zip at zipPath to the provider's email if configured
 async function sendBackupToProvider(providerId, zipPath, zipFilename, when) {
     try {
-        const provider = await prisma.provider.findUnique({ where: { id: providerId }, select: { email: true, backUpEmail: true, companyName: true, dailyBackup: true, settings: true } });
+        const provider = await prisma_1.default.provider.findUnique({ where: { id: providerId }, select: { email: true, backUpEmail: true, companyName: true, dailyBackup: true, settings: true } });
         if (!provider?.email) {
             throw new Error('Provider has no email configured');
         }
@@ -220,7 +219,7 @@ async function createBackupZipForProvider(providerId, when) {
     const now = when || new Date();
     const sqlFilename = `backup-${now.toISOString().slice(0, 10)}-db.sql`;
     const zipFilename = `backup-${now.toISOString().slice(0, 10)}-db.zip`;
-    const providerDirName = (await prisma.provider.findUnique({ where: { id: providerId }, select: { companyName: true } }))?.companyName?.trim().replace(/\s+/g, '_') || providerId;
+    const providerDirName = (await prisma_1.default.provider.findUnique({ where: { id: providerId }, select: { companyName: true } }))?.companyName?.trim().replace(/\s+/g, '_') || providerId;
     const backupDir = path_1.default.join(process.cwd(), 'uploads', 'backups', providerDirName);
     if (!fs_1.default.existsSync(backupDir))
         fs_1.default.mkdirSync(backupDir, { recursive: true });

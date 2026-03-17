@@ -1,7 +1,7 @@
 import { Request, Response } from "express"
 import { PrismaClient } from "@prisma/client";
+import prisma from "../../../utils/prisma";
 
-const prisma = new PrismaClient();
 
 export const getSms = async(req: Request, res: Response) => {
     const smsKey = req.smsKey

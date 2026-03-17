@@ -1,1 +1,1 @@
-{"version":3,"file":"imageSizeLimiter.d.ts","sourceRoot":"","sources":["../../src/middlewares/imageSizeLimiter.ts"],"names":[],"mappings":"AAAA,OAAO,OAA8B,MAAM,SAAS,CAAC;AAwCrD,eAAO,MAAM,MAAM,oIASD,CAAC"}
+{"version":3,"file":"imageSizeLimiter.d.ts","sourceRoot":"","sources":["../../src/middlewares/imageSizeLimiter.ts"],"names":[],"mappings":"AAAA,OAAO,OAA8B,MAAM,SAAS,CAAC;AAsCrD,eAAO,MAAM,MAAM,oIASD,CAAC"}

@@ -1,9 +1,7 @@
-import { PrismaClient } from "@prisma/client";
 import { decrypt } from "../utils/hasher";
+import prisma from "../utils/prisma";
 import { sendSms } from "./sendSms";
 import { addDays, endOfDay, startOfDay } from "date-fns";
-
-const prisma = new PrismaClient();
 
 // Maximum number of SMS to send concurrently
 const BATCH_SIZE = 5;
