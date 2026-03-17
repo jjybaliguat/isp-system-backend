@@ -16,7 +16,7 @@ interface Bandwidth {
 
 const previousCounters = new Map<string, PreviousCounter>();
 
-// buffer for 5 second batch
+// buffer for 3 second batch
 let bandwidthBuffer: Bandwidth[] = [];
 
 export async function collectPPPoESessionsBandwidth(): Promise<void> {
@@ -116,5 +116,5 @@ cron.schedule("0 * * * *", cleanupOldRecords);
 // collect every second
 setInterval(collectPPPoESessionsBandwidth, 1000);
 
-// save every 5 seconds
-setInterval(saveBandwidthBatch, 5000);
+// save every 3 seconds
+setInterval(saveBandwidthBatch, 3000);
