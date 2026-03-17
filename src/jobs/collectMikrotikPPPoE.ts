@@ -83,19 +83,12 @@ async function saveBandwidthBatch() {
 
     console.log(`Saved ${dataToSave.length} bandwidth records to pppoeBandwidth`);
 
-    await prisma.$transaction(
-      dataToSave.map(record =>
-        prisma.pppoeLatest.upsert({
-          where: { username: record.username },
-          update: {
-            rx_mbps: record.rx_mbps,
-            tx_mbps: record.tx_mbps,
-            recordedAt: record.recordedAt,
-          },
-          create: record,
-        })
-      )
-    );
+    await prisma.$transaction([
+      prisma.pppoeLatest.deleteMany(), // clear snapshot
+      prisma.pppoeLatest.createMany({
+        data: dataToSave,
+      }),
+    ]);
 
     console.log(`Updated ${dataToSave.length} records in pppoeLatest`);
   } catch (err: any) {
