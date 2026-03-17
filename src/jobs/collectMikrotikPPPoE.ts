@@ -32,7 +32,7 @@ async function collectPPPoESessionsBandwidth(): Promise<void> {
 
     const now = new Date();
 
-    const pppBandwidths: Bandwidth[] = activePppSessions.slice(0, 50).map((session: any) => {
+    const pppBandwidths: Bandwidth[] = activePppSessions.map((session: any) => {
       const username = session.name || "unknown";
 
       const rxBytes = Number(session["rx-byte"] || 0);
