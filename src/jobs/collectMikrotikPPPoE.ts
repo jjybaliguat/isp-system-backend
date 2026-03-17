@@ -135,7 +135,7 @@ async function cleanupOldRecords() {
   }
 }
 
-cron.schedule("* * * * * *", cleanupOldRecords);
+cron.schedule("0 * * * *", cleanupOldRecords);
 
 export async function startPPPBandwidthCollector() {
   let lastSave = Date.now();
