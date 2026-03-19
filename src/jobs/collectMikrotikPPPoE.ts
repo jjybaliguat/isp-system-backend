@@ -24,6 +24,7 @@ async function collectPPPoESessionsBandwidth(): Promise<void> {
   if (!conn) return;
 
   try {
+    // console.log("collecting")
     const interfaces = await conn.write("/interface/print", ["=stats="]);
 
     const activePppSessions = interfaces.filter(
@@ -47,6 +48,9 @@ async function collectPPPoESessionsBandwidth(): Promise<void> {
         txBytes >= prev.tx ? ((txBytes - prev.tx) * 8) / 1_000_000 : 0;
 
       previousCounters.set(username, { rx: rxBytes, tx: txBytes });
+
+      console.log("UPLOAD: " , rx_mbps)
+      console.log("DOWNLOAD: " , tx_mbps)
 
       return {
         username,
@@ -81,29 +85,29 @@ async function saveBandwidthBatch() {
       skipDuplicates: true,
     });
 
-    // 🔥 Deduplicate: keep latest per username
-    const latestMap = new Map<string, typeof dataToSave[0]>();
+    // // 🔥 Deduplicate: keep latest per username
+    // const latestMap = new Map<string, typeof dataToSave[0]>();
 
-    for (const record of dataToSave) {
-      const existing = latestMap.get(record.username);
+    // for (const record of dataToSave) {
+    //   const existing = latestMap.get(record.username);
 
-      if (!existing || record.recordedAt > existing.recordedAt) {
-        latestMap.set(record.username, record);
-      }
-    }
+    //   if (!existing || record.recordedAt > existing.recordedAt) {
+    //     latestMap.set(record.username, record);
+    //   }
+    // }
 
-    const latestData = Array.from(latestMap.values());
+    // const latestData = Array.from(latestMap.values());
 
-    // Replace snapshot
-    await prisma.$transaction([
-      prisma.pppoeLatest.deleteMany(),
-      prisma.pppoeLatest.createMany({
-        data: latestData,
-      }),
-    ]);
+    // // Replace snapshot
+    // await prisma.$transaction([
+    //   prisma.pppoeLatest.deleteMany(),
+    //   prisma.pppoeLatest.createMany({
+    //     data: latestData,
+    //   }),
+    // ]);
 
     console.log(
-      `Saved ${dataToSave.length} history + ${latestData.length} latest records`
+      `Saved ${dataToSave.length} history`
     );
   } catch (err: any) {
     console.error("Batch save failed:", err.message);
@@ -139,7 +143,7 @@ cron.schedule("0 * * * *", cleanupOldRecords);
 
 export async function startPPPBandwidthCollector() {
   let lastSave = Date.now();
-  const saveInterval = 3000; // 3 seconds
+  const saveInterval = 10000; // 3 seconds
 
   while (true) {
     const startTime = Date.now();
@@ -154,6 +158,6 @@ export async function startPPPBandwidthCollector() {
 
     // sleep 1 second minus collection time to maintain 1-sec interval
     const elapsed = Date.now() - startTime;
-    await new Promise(res => setTimeout(res, Math.max(0, 1000 - elapsed)));
+    await new Promise(res => setTimeout(res, Math.max(0, 3000 - elapsed)));
   }
 }

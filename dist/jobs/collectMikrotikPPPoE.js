@@ -3,12 +3,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.collectPPPoESessionsBandwidth = collectPPPoESessionsBandwidth;
+exports.startPPPBandwidthCollector = startPPPBandwidthCollector;
 const mikrotik_1 = require("../helpers/mikrotik");
 const node_cron_1 = __importDefault(require("node-cron"));
 const prisma_1 = __importDefault(require("../utils/prisma"));
 const previousCounters = new Map();
-// buffer for 5 second batch
+// buffer for 3 second batch
 let bandwidthBuffer = [];
 async function collectPPPoESessionsBandwidth() {
     const conn = await (0, mikrotik_1.getMikrotikConnection)();
@@ -50,15 +50,32 @@ async function saveBandwidthBatch() {
     const dataToSave = bandwidthBuffer;
     bandwidthBuffer = [];
     try {
+        // Save historical data
         await prisma_1.default.pppoeBandwidth.createMany({
             data: dataToSave,
             skipDuplicates: true,
         });
-        console.log(`Saved ${dataToSave.length} bandwidth records`);
+        // 🔥 Deduplicate: keep latest per username
+        const latestMap = new Map();
+        for (const record of dataToSave) {
+            const existing = latestMap.get(record.username);
+            if (!existing || record.recordedAt > existing.recordedAt) {
+                latestMap.set(record.username, record);
+            }
+        }
+        const latestData = Array.from(latestMap.values());
+        // Replace snapshot
+        await prisma_1.default.$transaction([
+            prisma_1.default.pppoeLatest.deleteMany(),
+            prisma_1.default.pppoeLatest.createMany({
+                data: latestData,
+            }),
+        ]);
+        console.log(`Saved ${dataToSave.length} history + ${latestData.length} latest records`);
     }
     catch (err) {
         console.error("Batch save failed:", err.message);
-        // return records to buffer if failed
+        // restore buffer on failure
         bandwidthBuffer.push(...dataToSave);
     }
 }
@@ -82,8 +99,22 @@ async function cleanupOldRecords() {
     }
 }
 node_cron_1.default.schedule("0 * * * *", cleanupOldRecords);
-// collect every second
-setInterval(collectPPPoESessionsBandwidth, 1000);
-// save every 5 seconds
-setInterval(saveBandwidthBatch, 5000);
+async function startPPPBandwidthCollector() {
+    let lastSave = Date.now();
+    const saveInterval = 3000; // 3 seconds
+    while (true) {
+        const startTime = Date.now();
+        // collect bandwidth
+        await collectPPPoESessionsBandwidth();
+        // check if it's time to save batch
+        if (Date.now() - lastSave >= saveInterval) {
+            // await saveBandwidthBatch();
+            // lastSave = Date.now();
+            console.log("saved");
+        }
+        // sleep 1 second minus collection time to maintain 1-sec interval
+        const elapsed = Date.now() - startTime;
+        await new Promise(res => setTimeout(res, Math.max(0, 1000 - elapsed)));
+    }
+}
 //# sourceMappingURL=collectMikrotikPPPoE.js.map

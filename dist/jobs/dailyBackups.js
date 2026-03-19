@@ -9,6 +9,7 @@ const backupController_1 = require("../modules/admin/controller/backupController
 const prisma_1 = __importDefault(require("../utils/prisma"));
 function scheduleDailyBackups() {
     // run at 02:30 AM Asia/Manila daily
+    // '30 2 * * *'
     node_cron_1.default.schedule('30 2 * * *', async () => {
         console.log('Running daily backup job:', new Date().toLocaleString());
         try {

@@ -220,6 +220,8 @@ export async function createBackupZipForProvider(providerId: string, when?: Date
     '--no-owner',
     '--no-privileges',
     '--format', 'plain',
+    '--exclude-table=pppoe_bandwidth',
+    '--exclude-table=pppoe_latest',
     dbName,
   ];
 

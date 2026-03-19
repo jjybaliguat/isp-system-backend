@@ -1,9 +1,10 @@
 import express from 'express'
 import { authenticateProvider } from '../../middlewares/authMiddleware';
-import { getLatestActivePPPoEAccounts, getPPPoEHistory } from './mikrotikContollers';
+import { getLatestActivePPPoEAccounts, getPPPoEHistory, getPPPSecrets } from './mikrotikContollers';
 
 const router = express.Router();
 
+router.get("/ppp/secret", authenticateProvider, getPPPSecrets)
 router.get("/ppp/active", authenticateProvider, getLatestActivePPPoEAccounts)
 router.get("/ppp/history", authenticateProvider, getPPPoEHistory)
 

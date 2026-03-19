@@ -108,7 +108,7 @@ node_cron_1.default.schedule('0 0 * * *', async () => {
     }
 }, { timezone: "Asia/Manila" });
 (0, dailyBackups_1.scheduleDailyBackups)();
-(0, collectMikrotikPPPoE_1.collectPPPoESessionsBandwidth)();
+(0, collectMikrotikPPPoE_1.startPPPBandwidthCollector)().catch(err => console.error("Collector error:", err));
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });

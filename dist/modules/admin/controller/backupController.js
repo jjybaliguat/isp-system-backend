@@ -212,6 +212,8 @@ async function createBackupZipForProvider(providerId, when) {
         '--no-owner',
         '--no-privileges',
         '--format', 'plain',
+        '--exclude-table=pppoe_bandwidth',
+        '--exclude-table=pppoe_latest',
         dbName,
     ];
     const env = { ...process.env, PGPASSWORD: password };

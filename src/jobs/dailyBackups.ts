@@ -4,6 +4,7 @@ import prisma from '../utils/prisma';
 
 export function scheduleDailyBackups() {
   // run at 02:30 AM Asia/Manila daily
+  // '30 2 * * *'
   cron.schedule('30 2 * * *', async () => {
     console.log('Running daily backup job:', new Date().toLocaleString());
     try {
