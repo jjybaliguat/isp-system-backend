@@ -33,6 +33,7 @@ import { scheduleDailyBackups } from './jobs/dailyBackups';
 import { PrismaClient } from '@prisma/client';
 import { sendSmsWhenTheBillIsDue } from './jobs/sendSmsWhenTheBillIsDue';
 import { startPPPBandwidthCollector } from './jobs/collectMikrotikPPPoE';
+import { cleanupOldRecords } from './jobs/cleanup';
 
 const prisma = new PrismaClient();
 
@@ -44,7 +45,7 @@ const trustProxySetting =
 
 app.set("trust proxy", trustProxySetting);
 
-const PORT = process.env.PORT || 5000;
+const PORT = Number(process.env.PORT) || 5000;
 
 const UPLOAD_DIR = path.resolve(__dirname, "../uploads");
 
@@ -119,10 +120,21 @@ cron.schedule('0 0 * * *', async () => {
   }
 }, { timezone: "Asia/Manila" });
 
+cron.schedule(
+  "*/20 * * * * *",
+  async () => {
+    try {
+      await cleanupOldRecords();
+    } catch (error) {
+       console.error("Error in daily pppoe cleanup:", error);
+    }
+  }, { timezone: "Asia/Manila" }
+);
+
 scheduleDailyBackups();
 startPPPBandwidthCollector().catch(err => console.error("Collector error:", err));
 
 
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-})
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server is running on port ${PORT}`);
+});
