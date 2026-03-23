@@ -5,7 +5,7 @@ export async function cleanupOldRecords() {
   try {
     console.log("Running cleanup...");
 
-    const cutoff = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000); // 1 day ago
+    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 7 day ago
 
     const deleted = await prisma.pppoeBandwidth.deleteMany({
       where: { recordedAt: { lt: cutoff } },

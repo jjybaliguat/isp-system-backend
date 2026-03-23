@@ -121,7 +121,7 @@ cron.schedule('0 0 * * *', async () => {
 }, { timezone: "Asia/Manila" });
 
 cron.schedule(
-  "*/20 * * * * *",
+  "* * * * *",
   async () => {
     try {
       await cleanupOldRecords();

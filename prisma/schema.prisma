@@ -747,8 +747,8 @@ model Message {
 model PppoeBandwidth {
   id          Int      @id @default(autoincrement())
   username    String
-  rx_mbps     Float
-  tx_mbps     Float
+  rx_mbps     Int
+  tx_mbps     Int
   recordedAt  DateTime @default(now()) @map("recorded_at")
 
   @@index([username, recordedAt], name: "idx_pppoe_user_time")
