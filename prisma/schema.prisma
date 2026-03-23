@@ -754,13 +754,3 @@ model PppoeBandwidth {
   @@index([username, recordedAt], name: "idx_pppoe_user_time")
   @@map("pppoe_bandwidth")
 }
-
-model PppoeLatest {
-  username    String   @id
-  rx_mbps     Float
-  tx_mbps     Float
-  recordedAt  DateTime
-
-  @@map("pppoe_latest")
-}
-

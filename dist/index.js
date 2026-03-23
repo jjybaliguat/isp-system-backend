@@ -36,12 +36,13 @@ const dailyBackups_1 = require("./jobs/dailyBackups");
 const client_1 = require("@prisma/client");
 const sendSmsWhenTheBillIsDue_1 = require("./jobs/sendSmsWhenTheBillIsDue");
 const collectMikrotikPPPoE_1 = require("./jobs/collectMikrotikPPPoE");
+const cleanup_1 = require("./jobs/cleanup");
 const prisma = new client_1.PrismaClient();
 const app = (0, express_1.default)();
 const trustProxySetting = process.env.TRUST_PROXY ??
     (process.env.NODE_ENV === "production" ? 1 : false);
 app.set("trust proxy", trustProxySetting);
-const PORT = process.env.PORT || 5000;
+const PORT = Number(process.env.PORT) || 5000;
 const UPLOAD_DIR = path_1.default.resolve(__dirname, "../uploads");
 app.use("/uploads", express_1.default.static(UPLOAD_DIR));
 (async () => {
@@ -107,9 +108,17 @@ node_cron_1.default.schedule('0 0 * * *', async () => {
         console.error("Error in daily cron job:", error);
     }
 }, { timezone: "Asia/Manila" });
+node_cron_1.default.schedule("* * * * *", async () => {
+    try {
+        await (0, cleanup_1.cleanupOldRecords)();
+    }
+    catch (error) {
+        console.error("Error in daily pppoe cleanup:", error);
+    }
+}, { timezone: "Asia/Manila" });
 (0, dailyBackups_1.scheduleDailyBackups)();
 (0, collectMikrotikPPPoE_1.startPPPBandwidthCollector)().catch(err => console.error("Collector error:", err));
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server is running on port ${PORT}`);
 });
 //# sourceMappingURL=index.js.map
