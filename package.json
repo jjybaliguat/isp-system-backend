@@ -47,6 +47,7 @@
     "node-routeros": "^1.6.9",
     "nodemailer": "^7.0.10",
     "prisma": "^6.16.3",
+    "routeros-node": "^0.1.0",
     "ua-parser-js": "^2.0.6",
     "uuid": "^8.3.2",
     "xendit-node": "^7.0.0"

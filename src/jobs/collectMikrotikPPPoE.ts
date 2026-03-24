@@ -11,11 +11,11 @@ async function collectPPPoESessionsBandwidth() {
   if (!conn) return;
 
   try {
-    const interfaces = await conn.write("/interface/print", ["=stats="]);
+    const interfaces = await conn.write(["/interface/print", "=stats="]);
     const activePppSessions = interfaces.filter((intf: any) => intf.type === "pppoe-in");
 
     const now = new Date();
-    const pppBandwidths = activePppSessions.filter((p: any) =>p.name === "<pppoe-BITWISE>").map((session: any) => {
+    const pppBandwidths = activePppSessions.map((session: any) => {
       const username = session.name || "unknown";
       const rxBytes = Number(session["rx-byte"] || 0);
       const txBytes = Number(session["tx-byte"] || 0);
@@ -29,8 +29,8 @@ async function collectPPPoESessionsBandwidth() {
         ? ((txBytes - prev.tx) * 8) / (1_000_000 * intervalSec) 
         : 0;
 
-        console.log("RX: ", rx_mbps)
-        console.log("TX: ", tx_mbps)
+        // console.log("RX: ", rx_mbps)
+        // console.log("TX: ", tx_mbps)
 
       previousCounters.set(username, { rx: rxBytes, tx: txBytes });
 
