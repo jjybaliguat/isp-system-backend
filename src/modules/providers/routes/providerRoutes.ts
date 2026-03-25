@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import {  createProvider, createSmsIntegrationSettings, deleteProvider, getProvider, getProviderById, getProviders, getProvidersWithFilteredResponse, getSmsIntegrationSettings, getStoredKey, testSemaphoreConnection, testXenditConnection, updateAccount, updateSemaphoreKey, updateXenditKey, uploadProviderLogo } from '../controllers/providerController';
+import {  createProvider, createSmsIntegrationSettings, deleteProvider, getOtherPaymentOptions, getProvider, getProviderById, getProviders, getProvidersWithFilteredResponse, getSmsIntegrationSettings, getStoredKey, testSemaphoreConnection, testXenditConnection, updateAccount, updateSemaphoreKey, updateXenditKey, uploadProviderLogo } from '../controllers/providerController';
 import { authenticateProvider, validateProviderSmsKey, validateProviderXenditKey } from '../../../middlewares/authMiddleware';
 import { upload } from '../../../middlewares/imageSizeLimiter';
 
@@ -8,6 +8,7 @@ const router = Router();
 router.get('/', authenticateProvider, getProviders);
 router.get('/get-providers', getProvidersWithFilteredResponse)
 router.get('/get-provider', authenticateProvider, getProvider);
+router.get('/other-payment-options', authenticateProvider, getOtherPaymentOptions);
 router.patch('/update-account', authenticateProvider, updateAccount);
 // router.get('/:id', getProviderById);
 router.post('/', authenticateProvider, createProvider);

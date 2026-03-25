@@ -91,6 +91,46 @@ export const updatePaymentSettings = async (req: Request, res: Response) => {
   }
 };
 
+export const updatePaymentOptions = async(req: Request, res: Response) => {
+  const {id, providerId} = req.user
+  const {paymentOptions} = req.body as {paymentOptions: {paymentProvider: string, accName: string, accNum: string, qrCodeUrl: string}[]}
+  
+  // if(!paymentOptions || paymentOptions.length == 0) return res.status(400).json({message: "Missing required fields"})
+  try {
+    const user = await prisma.user.findUnique({
+      where: {
+        id
+      },
+      select: {
+        role: true
+      }
+    })
+
+    if(user?.role !== "SUPERADMIN") return res.status(403).json({message: "Forbidden: unable to perform the operation"})
+
+      // delete all paymentOptions belongs to this provider
+    await prisma.otherPaymentOptions.deleteMany({
+      where: {
+        providerId
+      }
+    })
+
+    const otherPaymentOption = await prisma.otherPaymentOptions.createMany({
+      data: paymentOptions.map((p)=>{
+        return {
+          ...p,
+          providerId
+        }
+      })
+    })
+
+    return res.status(200).json(otherPaymentOption)
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({message: "Internal Server Error"})
+  }
+}
+
 export const updateBillingSettings = async (req: Request, res: Response) => {
   const { 
     autoInvoicing,
