@@ -14,9 +14,29 @@ export const getProvider = async (req: Request, res: Response) => {
         const provider = await prisma.provider.findUnique({
             where: {
                 id: providerId
+            },
+            include: {
+                otherPaymentOptions: true
             }
         });
+
         res.status(200).json(provider);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+export const getOtherPaymentOptions = async(req: Request, res: Response) => {
+    const {providerId} = req.user
+    try {
+        const paymentOptions = await prisma.otherPaymentOptions.findMany({
+            where: {
+                providerId
+            }
+        })
+
+        return res.status(200).json(paymentOptions)
     } catch (error) {
         console.log(error);
         res.status(500).json({ message: 'Internal server error' });

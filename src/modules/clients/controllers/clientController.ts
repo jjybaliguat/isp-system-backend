@@ -1526,6 +1526,7 @@ export const generateSoaReport = async (req: Request, res: Response) => {
         phoneNumber: client.phoneNumber,
         address: client.address,
         accountNumbers: client.accounts.map((a) => a.accountNumber),
+        installationDate: client.installationDate
       },
       statement,
       generatedAt: new Date(),

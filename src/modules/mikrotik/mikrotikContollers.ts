@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import prisma from "../../utils/prisma";
 import { closeMikrotikConnection, getMikrotikConnection } from "../../helpers/mikrotik";
 
-export const getLatestActivePPPoEAccounts = async (
+export const getPPPActive = async (
   req: Request,
   res: Response
 ) => {
