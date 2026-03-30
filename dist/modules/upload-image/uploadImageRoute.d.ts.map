@@ -1,1 +1,1 @@
-{"version":3,"file":"uploadImageRoute.d.ts","sourceRoot":"","sources":["../../../src/modules/upload-image/uploadImageRoute.ts"],"names":[],"mappings":"AAOA,QAAA,MAAM,MAAM,4CAAmB,CAAC;AA8BhC,eAAe,MAAM,CAAC"}
+{"version":3,"file":"uploadImageRoute.d.ts","sourceRoot":"","sources":["../../../src/modules/upload-image/uploadImageRoute.ts"],"names":[],"mappings":"AAQA,QAAA,MAAM,MAAM,4CAAmB,CAAC;AAkChC,eAAe,MAAM,CAAC"}

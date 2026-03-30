@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getSmsIntegrationSettings = exports.createSmsIntegrationSettings = exports.uploadProviderLogo = exports.updateAccount = exports.testSemaphoreConnection = exports.testXenditConnection = exports.getStoredKey = exports.updateSemaphoreKey = exports.updateXenditKey = exports.deleteProvider = exports.updateProvider = exports.createProvider = exports.getProviderById = exports.getProvidersWithFilteredResponse = exports.getProviders = exports.getProvider = void 0;
+exports.testTelegramConnection = exports.getTelegramSettings = exports.createTelegramSettings = exports.getSmsIntegrationSettings = exports.createSmsIntegrationSettings = exports.uploadProviderLogo = exports.updateAccount = exports.testSemaphoreConnection = exports.testXenditConnection = exports.getStoredKey = exports.updateSemaphoreKey = exports.updateXenditKey = exports.deleteProvider = exports.updateProvider = exports.createProvider = exports.getProviderById = exports.getProvidersWithFilteredResponse = exports.getProviders = exports.getOtherPaymentOptions = exports.getProvider = void 0;
 const uuid_1 = require("uuid");
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
@@ -12,12 +12,16 @@ const hasher_1 = require("../../../utils/hasher");
 const xendit_node_1 = __importDefault(require("xendit-node"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const prisma_1 = __importDefault(require("../../../utils/prisma"));
+const sendTelegramNotification_1 = require("../../../helpers/sendTelegramNotification");
 const getProvider = async (req, res) => {
     const { providerId } = req.user;
     try {
         const provider = await prisma_1.default.provider.findUnique({
             where: {
                 id: providerId
+            },
+            include: {
+                otherPaymentOptions: true
             }
         });
         res.status(200).json(provider);
@@ -28,6 +32,22 @@ const getProvider = async (req, res) => {
     }
 };
 exports.getProvider = getProvider;
+const getOtherPaymentOptions = async (req, res) => {
+    const { providerId } = req.user;
+    try {
+        const paymentOptions = await prisma_1.default.otherPaymentOptions.findMany({
+            where: {
+                providerId
+            }
+        });
+        return res.status(200).json(paymentOptions);
+    }
+    catch (error) {
+        console.log(error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+exports.getOtherPaymentOptions = getOtherPaymentOptions;
 const getProviders = async (req, res) => {
     const { providerId } = req.user;
     const page = Number(req.query.page) || 1;
@@ -550,4 +570,89 @@ const getSmsIntegrationSettings = async (req, res) => {
     }
 };
 exports.getSmsIntegrationSettings = getSmsIntegrationSettings;
+const createTelegramSettings = async (req, res) => {
+    const { enabled, type, chatId, botToken } = req.body;
+    const { providerId } = req.user;
+    try {
+        const existingSettings = await prisma_1.default.telegramSettings.findUnique({
+            where: {
+                providerId,
+                type
+            }
+        });
+        if (existingSettings) {
+            const updatedSettings = await prisma_1.default.telegramSettings.update({
+                where: {
+                    providerId,
+                    type
+                },
+                data: {
+                    enabled: enabled !== undefined ? enabled : existingSettings.enabled,
+                    chatId,
+                    botToken
+                }
+            });
+            return res.status(200).json(updatedSettings);
+        }
+        else {
+            const settings = await prisma_1.default.telegramSettings.create({
+                data: {
+                    enabled: enabled !== undefined ? enabled : false,
+                    providerId,
+                    type,
+                    chatId,
+                    botToken
+                }
+            });
+            return res.status(201).json(settings);
+        }
+    }
+    catch (error) {
+        console.log(error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+exports.createTelegramSettings = createTelegramSettings;
+const getTelegramSettings = async (req, res) => {
+    const { providerId } = req.user;
+    try {
+        const settings = await prisma_1.default.telegramSettings.findMany({
+            where: {
+                providerId
+            }
+        });
+        return res.status(200).json(settings);
+    }
+    catch (error) {
+        console.log(error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+exports.getTelegramSettings = getTelegramSettings;
+const testTelegramConnection = async (req, res) => {
+    const { providerId } = req.user;
+    const { type } = req.body;
+    console.log("Testing Telegram connection with providerId:", providerId, "and type:", type);
+    try {
+        const response = await prisma_1.default.telegramSettings.findFirst({
+            where: {
+                providerId,
+                type
+            }
+        });
+        if (!response) {
+            return res.status(404).json({ message: "Telegram settings not found for this type" });
+        }
+        const testNotif = await (0, sendTelegramNotification_1.sendTelegramMessage)("This is a test notification from ISP System. If you received this, the connection is successful!", response.botToken, response.chatId);
+        if (!testNotif?.data?.ok) {
+            return res.status(500).json({ message: "Failed to send test notification" });
+        }
+        return res.status(200).json({ success: true });
+    }
+    catch (error) {
+        console.log(error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+exports.testTelegramConnection = testTelegramConnection;
 //# sourceMappingURL=providerController.js.map

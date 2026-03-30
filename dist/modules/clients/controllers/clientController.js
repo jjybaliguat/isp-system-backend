@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getUserTickets = exports.getClientBillings = exports.generateSoaReport = exports.getClientsPhoneNumbers = exports.deleteClient = exports.updateClient = exports.deleteClientAccount = exports.updateClientAccount = exports.createAccount = exports.createClient = exports.getClientById = exports.getClientsCount = exports.getPortalData = exports.getClientsAnalytics = exports.getAccounts = exports.getClients = void 0;
+exports.submitPaymentProof = exports.getUserTickets = exports.getClientBillings = exports.generateSoaReport = exports.getClientsPhoneNumbers = exports.deleteClient = exports.updateClient = exports.deleteClientAccount = exports.updateClientAccount = exports.createAccount = exports.createClient = exports.getClientById = exports.getClientsCount = exports.getPortalData = exports.getClientsAnalytics = exports.getAccounts = exports.getClients = void 0;
 const client_1 = require("@prisma/client");
 const logger_1 = require("../../../utils/logger");
 const date_fns_1 = require("date-fns");
@@ -12,6 +12,7 @@ const hasher_1 = require("../../../utils/hasher");
 const sendSms_1 = require("../../../jobs/sendSms");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const prisma_1 = __importDefault(require("../../../utils/prisma"));
+const sendTelegramNotification_1 = require("../../../helpers/sendTelegramNotification");
 const getClients = async (req, res) => {
     const { id: userId, providerId } = req.user;
     const page = Number(req.query.page) || 1;
@@ -1288,6 +1289,7 @@ const generateSoaReport = async (req, res) => {
                 phoneNumber: client.phoneNumber,
                 address: client.address,
                 accountNumbers: client.accounts.map((a) => a.accountNumber),
+                installationDate: client.installationDate
             },
             statement,
             generatedAt: new Date(),
@@ -1436,4 +1438,51 @@ const getUserTickets = async (req, res) => {
     }
 };
 exports.getUserTickets = getUserTickets;
+const submitPaymentProof = async (req, res) => {
+    const { imageUrl } = req.body;
+    const { id: billingId } = req.params;
+    const { providerId } = req.user;
+    try {
+        const billing = await prisma_1.default.billing.findFirst({
+            where: {
+                id: billingId,
+                client: {
+                    providerId
+                }
+            },
+            include: {
+                client: {
+                    include: {
+                        provider: {
+                            select: {
+                                telegramSettings: true
+                            }
+                        }
+                    }
+                },
+            }
+        });
+        if (!billing) {
+            return res.status(404).json({ message: "Billing not found" });
+        }
+        await prisma_1.default.paymentProofs.create({
+            data: {
+                billingId,
+                imageUrl,
+                providerId
+            }
+        });
+        const providerTelegramSettings = billing.client.provider.telegramSettings.map(s => s.type === client_1.TelegramNotificationType.PAYMENT ? s : null).filter(s => s !== null)[0];
+        if (providerTelegramSettings?.enabled && providerTelegramSettings.chatId) {
+            const message = `💰 <b>Payment Proof</b>\n\n👤 Client: ${billing?.client.fullName}\n🧾 Invoice: ${billing?.invoiceNumber}\n📅 Period: ${billing?.period}\n\n📎 <a href=\"${imageUrl}\">View Proof</a>`;
+            await (0, sendTelegramNotification_1.sendTelegramMessage)(message, providerTelegramSettings.botToken, providerTelegramSettings.chatId);
+        }
+        return res.status(200).json({ message: "Payment proof submitted successfully" });
+    }
+    catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+};
+exports.submitPaymentProof = submitPaymentProof;
 //# sourceMappingURL=clientController.js.map

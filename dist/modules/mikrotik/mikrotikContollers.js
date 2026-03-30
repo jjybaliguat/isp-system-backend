@@ -3,10 +3,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getPPPSecrets = exports.getPPPoEHistory = exports.getLatestActivePPPoEAccounts = void 0;
+exports.updatePPPSecrets = exports.getPPPSecrets = exports.getPPPoEHistory = exports.getPPPActive = void 0;
 const prisma_1 = __importDefault(require("../../utils/prisma"));
 const mikrotik_1 = require("../../helpers/mikrotik");
-const getLatestActivePPPoEAccounts = async (req, res) => {
+const getPPPActive = async (req, res) => {
     const { providerId } = req.user;
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 10;
@@ -45,7 +45,7 @@ const getLatestActivePPPoEAccounts = async (req, res) => {
         return res.status(500).json({ message: "Internal Server Error" });
     }
 };
-exports.getLatestActivePPPoEAccounts = getLatestActivePPPoEAccounts;
+exports.getPPPActive = getPPPActive;
 const getPPPoEHistory = async (req, res) => {
     try {
         const username = req.query.username;
@@ -101,6 +101,7 @@ const getPPPSecrets = async (req, res) => {
     const { id, providerId } = req.user;
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 10;
+    const status = typeof req.query.status === "string" ? req.query.status.trim().toLowerCase() : "All";
     const search = typeof req.query.search === "string" ? req.query.search.trim().toLowerCase() : "";
     const offset = (page - 1) * limit;
     const conn = await (0, mikrotik_1.getMikrotikConnection)();
@@ -109,14 +110,22 @@ const getPPPSecrets = async (req, res) => {
     }
     try {
         const pppsecrets = await conn.write("/ppp/secret/print");
-        // 🔍 Search filter (you can customize fields)
-        const filtered = search
-            ? pppsecrets.filter((secret) => {
-                return (secret.name?.toLowerCase().includes(search) ||
-                    secret.service?.toLowerCase().includes(search) ||
-                    secret.profile?.toLowerCase().includes(search));
-            })
-            : pppsecrets;
+        const normalizedSearch = search?.toLowerCase();
+        const filtered = pppsecrets.filter((secret) => {
+            const matchesSearch = normalizedSearch
+                ? [
+                    secret.name,
+                    secret.service,
+                    secret.profile,
+                ].some(field => field?.toLowerCase().includes(normalizedSearch))
+                : true;
+            const matchesStatus = status === "enabled"
+                ? secret.disabled === "false"
+                : status === "disabled"
+                    ? secret.disabled === "true"
+                    : true;
+            return matchesSearch && matchesStatus;
+        });
         const totalCount = filtered.length;
         const totalPages = Math.ceil(totalCount / limit);
         // 📄 Pagination
@@ -138,4 +147,69 @@ const getPPPSecrets = async (req, res) => {
     }
 };
 exports.getPPPSecrets = getPPPSecrets;
+const updatePPPSecrets = async (req, res) => {
+    const { id, providerId } = req.user;
+    const { names, action } = req.body;
+    // ids: string[] (e.g. ["*1", "*2"])
+    // action: "delete" | "enable" | "disable"
+    let conn;
+    try {
+        conn = await (0, mikrotik_1.getMikrotikConnection)();
+        if (!conn) {
+            return res.status(500).json({ message: "Failed to connect to MikroTik" });
+        }
+        for (const name of names) {
+            const secrets = await conn.write("/ppp/secret/print", [`?name=${name}`]);
+            const secretId = secrets[0]?.['.id'];
+            if (!secretId) {
+                console.warn(`Secret not found: ${name}`);
+                continue;
+            }
+            let actionStr = '';
+            switch (action) {
+                case "delete":
+                    actionStr = "deleted";
+                    await conn.write("/ppp/secret/remove", [`=.id=${secretId}`]);
+                    break;
+                case "disable":
+                    actionStr = "disabled";
+                    await conn.write("/ppp/secret/disable", [`=.id=${secretId}`]);
+                    const activeSession = await conn.write("/ppp/active/print", [`?name=${name}`]);
+                    if (!activeSession[0]?.['.id'])
+                        break;
+                    else
+                        await conn.write("/ppp/active/remove", [`=.id=${activeSession[0]['.id']}`]);
+                    break;
+                case "enable":
+                    actionStr = "enabled";
+                    await conn.write("/ppp/secret/enable", [`=.id=${secretId}`]);
+                    break;
+                default:
+                    return res.status(400).json({ message: "Invalid action" });
+            }
+            await prisma_1.default.log.create({
+                data: {
+                    action: action.toUpperCase(),
+                    entity: "Mikrotik",
+                    userId: id,
+                    providerId,
+                    message: `Mikrotik PPP ${name} ${actionStr}`
+                }
+            });
+        }
+        await (0, mikrotik_1.closeMikrotikConnection)();
+        return res.status(200).json({
+            message: `PPP secrets ${action}d successfully`,
+        });
+    }
+    catch (error) {
+        if (conn)
+            await (0, mikrotik_1.closeMikrotikConnection)();
+        console.error(error);
+        return res.status(500).json({
+            message: "Internal Server Error",
+        });
+    }
+};
+exports.updatePPPSecrets = updatePPPSecrets;
 //# sourceMappingURL=mikrotikContollers.js.map

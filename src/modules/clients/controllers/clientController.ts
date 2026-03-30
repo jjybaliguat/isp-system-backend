@@ -1,4 +1,4 @@
-import { BillingType, PrismaClient, UserRole } from "@prisma/client";
+import { BillingType, PrismaClient, TelegramNotificationType, UserRole } from "@prisma/client";
 import { Request, Response } from "express";
 import { logTransaction } from "../../../utils/logger";
 import { addMonths, startOfMonth, endOfMonth, setDate, addDays, format } from "date-fns";
@@ -7,6 +7,7 @@ import { decrypt } from "../../../utils/hasher";
 import { sendSms } from "../../../jobs/sendSms";
 import bcrypt from "bcryptjs";
 import prisma from "../../../utils/prisma";
+import { sendTelegramMessage } from "../../../helpers/sendTelegramNotification";
 
 
 export const getClients = async (req: Request, res: Response) => {
@@ -1679,5 +1680,56 @@ export const getUserTickets = async (req: Request, res: Response) => {
     } catch (error) {
         console.log(error)
         return res.status(500).json({message: "Internal Server Error"})
+    }
+}
+
+
+export const submitPaymentProof = async(req: Request, res: Response) => {
+    const { imageUrl } = req.body
+    const { id: billingId } = req.params as {id: string}
+    const { providerId } = req.user
+
+    try {
+        const billing = await prisma.billing.findFirst({
+            where: {
+                id: billingId,
+                client: {
+                    providerId
+                }
+            },
+            include: {
+                client: {
+                    include: {
+                        provider: {
+                            select: {
+                                telegramSettings: true
+                            }
+                        }
+                    }
+                },
+            }
+        })
+        if(!billing) {
+            return res.status(404).json({message: "Billing not found"})
+        }
+
+        await prisma.paymentProofs.create({
+            data: {
+                billingId,
+                imageUrl,
+                providerId
+            }
+        })
+
+        const providerTelegramSettings = billing.client.provider.telegramSettings.map(s => s.type === TelegramNotificationType.PAYMENT ? s : null).filter(s => s !== null)[0]
+        if(providerTelegramSettings?.enabled && providerTelegramSettings.chatId){
+            const message = `💰 <b>Payment Proof</b>\n\n👤 Client: ${billing?.client.fullName}\n🧾 Invoice: ${billing?.invoiceNumber}\n📅 Period: ${billing?.period}\n\n📎 <a href=\"${imageUrl}\">View Proof</a>`
+            await sendTelegramMessage(message, providerTelegramSettings.botToken, providerTelegramSettings.chatId)
+        }
+
+        return res.status(200).json({message: "Payment proof submitted successfully"})
+    } catch (error) {
+        console.error(error)
+        return res.status(500).json({ message: "Internal server error" })
     }
 }

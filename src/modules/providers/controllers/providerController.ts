@@ -7,6 +7,8 @@ import { decrypt, encrypt } from '../../../utils/hasher';
 import Xendit from 'xendit-node';
 import bcrypt from "bcryptjs";
 import prisma from '../../../utils/prisma';
+import { send } from 'process';
+import { sendTelegramMessage } from '../../../helpers/sendTelegramNotification';
 
 export const getProvider = async (req: Request, res: Response) => {
     const {providerId} = req.user
@@ -644,4 +646,98 @@ export const getSmsIntegrationSettings = async(req: Request, res: Response) => {
         console.log(error)
         res.status(500).json({ message: 'Internal server error' })
     }   
+}
+
+export const createTelegramSettings = async(req: Request, res: Response) => {
+    const {
+        enabled,
+        type,
+        chatId,
+        botToken
+    } = req.body
+
+    const { providerId } = req.user
+
+    try {
+        const existingSettings = await prisma.telegramSettings.findUnique({
+            where: {
+                providerId,
+                type
+            }
+        })
+        if(existingSettings) {
+            const updatedSettings = await prisma.telegramSettings.update({
+                where: {
+                    providerId,
+                    type
+                },
+                data: {
+                    enabled: enabled !== undefined ? enabled : existingSettings.enabled,
+                    chatId,
+                    botToken
+                }
+            })
+            return res.status(200).json(updatedSettings)
+        } else {
+            const settings = await prisma.telegramSettings.create({
+                data: {
+                    enabled: enabled !== undefined ? enabled : false,
+                    providerId,
+                    type,
+                    chatId,
+                    botToken
+                }
+            })
+            return res.status(201).json(settings)
+        }
+    } catch (error) {
+        console.log(error)
+        res.status(500).json({ message: 'Internal server error' })
+    }
+}
+
+export const getTelegramSettings = async(req: Request, res: Response) => {
+    const {providerId} = req.user
+    try {
+        const settings = await prisma.telegramSettings.findMany({
+            where: {
+                providerId
+            }
+        })
+        return res.status(200).json(settings)
+    }
+    catch (error) {
+        console.log(error)
+        res.status(500).json({ message: 'Internal server error' })
+    }   
+}
+
+export const testTelegramConnection = async(req: Request, res: Response) => {
+    const {providerId} = req.user
+    const { type } = req.body
+
+    console.log("Testing Telegram connection with providerId:", providerId, "and type:", type)
+    try {
+        const response = await prisma.telegramSettings.findFirst({
+            where: {
+                providerId,
+                type
+            }
+        })
+
+        if (!response) {
+            return res.status(404).json({ message: "Telegram settings not found for this type" });
+        }
+
+        const testNotif = await sendTelegramMessage("This is a test notification from ISP System. If you received this, the connection is successful!", response.botToken, response.chatId)
+        
+        if(!testNotif?.data?.ok) {
+            return res.status(500).json({message: "Failed to send test notification"})
+        }
+
+        return res.status(200).json({success: true})
+    } catch (error) {
+        console.log(error)
+        res.status(500).json({ message: 'Internal server error' })
+    }
 }

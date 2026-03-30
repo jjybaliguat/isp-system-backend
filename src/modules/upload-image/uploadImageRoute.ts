@@ -4,6 +4,7 @@ import path from "path";
 import fs from "fs";
 import { authenticateProvider } from "../../middlewares/authMiddleware";
 import { upload } from "../../middlewares/imageSizeLimiter";
+import { rateLimiter } from "../../middlewares/rateLimiter";
 
 const router = express.Router();
 
@@ -11,6 +12,7 @@ const router = express.Router();
 router.post(
   "/",
   authenticateProvider,
+  rateLimiter,
   async (req: Request, res: Response) => {
     upload(req, res, (err) => {
       if (err) {

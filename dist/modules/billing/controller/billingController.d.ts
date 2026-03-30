@@ -13,4 +13,5 @@ export declare const sendPaymentConfirmationEmail: (req: Request, res: Response)
 export declare const sendEmailReminder: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const sendSmsReminder: (req: Request, res: Response) => Promise<Response<any, Record<string, any>> | undefined>;
 export declare const generateBillingForAllAccounts: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const getPaymentProofs: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 //# sourceMappingURL=billingController.d.ts.map

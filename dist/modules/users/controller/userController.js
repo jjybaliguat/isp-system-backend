@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.changePass = exports.deleteUser = exports.createUser = exports.getUsers = void 0;
+exports.changePass = exports.checkPassword = exports.deleteUser = exports.createUser = exports.getUsers = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const prisma_1 = __importDefault(require("../../../utils/prisma"));
 const getUsers = async (req, res) => {
@@ -194,6 +194,31 @@ const deleteUser = async (req, res) => {
     }
 };
 exports.deleteUser = deleteUser;
+const checkPassword = async (req, res) => {
+    const { id, providerId } = req.user;
+    const { password } = req.body;
+    try {
+        const user = await prisma_1.default.user.findUnique({
+            where: {
+                id
+            },
+            select: {
+                password: true
+            }
+        });
+        if (!user)
+            return res.status(404).json({ message: "User not found" });
+        const isPasswordMatched = await bcryptjs_1.default.compare(password, user?.password);
+        if (!isPasswordMatched)
+            return res.status(400).json({ message: "Invalid Password" });
+        return res.status(200).json({ message: "Authorized" });
+    }
+    catch (error) {
+        console.log(error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+};
+exports.checkPassword = checkPassword;
 const changePass = async (req, res) => {
     const { id } = req.params;
     const { currentPassword, newPassword } = req.body;

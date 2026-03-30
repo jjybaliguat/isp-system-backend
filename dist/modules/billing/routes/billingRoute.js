@@ -18,5 +18,6 @@ router.get('/get-bills/:accountNumber', billingController_1.getBillingByAccountN
 router.get('/unpaid/:id', billingController_1.getUnpaidBillingById);
 router.get('/:id', billingController_1.getBillingById);
 router.delete('/:id', authMiddleware_1.authenticateProvider, billingController_1.deleteBilling);
+router.get('/payment/proofs', authMiddleware_1.authenticateProvider, billingController_1.getPaymentProofs);
 exports.default = router;
 //# sourceMappingURL=billingRoute.js.map

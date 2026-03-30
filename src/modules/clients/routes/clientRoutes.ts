@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createAccount, createClient, deleteClient, deleteClientAccount, generateSoaReport, getAccounts, getClientBillings, getClientById, getClients, getClientsAnalytics, getClientsCount, getClientsPhoneNumbers, getPortalData, getUserTickets, updateClient, updateClientAccount } from "../controllers/clientController";
+import { createAccount, createClient, deleteClient, deleteClientAccount, generateSoaReport, getAccounts, getClientBillings, getClientById, getClients, getClientsAnalytics, getClientsCount, getClientsPhoneNumbers, getPortalData, getUserTickets, submitPaymentProof, updateClient, updateClientAccount } from "../controllers/clientController";
 import { authenticateProvider } from "../../../middlewares/authMiddleware";
 
 const router = Router();
@@ -20,5 +20,6 @@ router.patch("/account/:id", authenticateProvider, updateClientAccount)
 router.delete("/account/:id", authenticateProvider, deleteClientAccount)
 router.patch("/:id", authenticateProvider, updateClient)
 router.delete("/:id", authenticateProvider, deleteClient)
+router.post("/:id/payment-proof", authenticateProvider, submitPaymentProof)
 
 export default router;

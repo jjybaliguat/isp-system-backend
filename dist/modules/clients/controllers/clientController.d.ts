@@ -15,4 +15,5 @@ export declare const getClientsPhoneNumbers: (req: Request, res: Response) => Pr
 export declare const generateSoaReport: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const getClientBillings: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const getUserTickets: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const submitPaymentProof: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 //# sourceMappingURL=clientController.d.ts.map

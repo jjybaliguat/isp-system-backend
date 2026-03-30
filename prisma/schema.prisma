@@ -170,6 +170,8 @@ model Billing {
   
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+
+  paymentProofs PaymentProofs[]
 }
 
 model BillingCharges {
@@ -197,6 +199,16 @@ model Discount {
   amount  Float
   billingId String @db.Uuid
   billing Billing @relation(fields: [billingId], references: [id], onDelete: Cascade)
+}
+
+model PaymentProofs {
+  id           String   @id @default(uuid()) @db.Uuid
+  billingId    String   @db.Uuid
+  billing      Billing  @relation(fields: [billingId], references: [id], onDelete: Cascade)
+  providerId    String   @db.Uuid
+  provider      Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  imageUrl     String
+  createdAt    DateTime @default(now())
 }
 
 model CronJob {
@@ -278,7 +290,6 @@ model Provider {
   teams          EmployeesTeam[]
   settings  Json? @default("{}")
   smsIntegrationSettings SmsIntegrationSettings?
-
   
   /// 🔗 Self relation (Parent → Branches)
   parentProviderId String?  @db.Uuid
@@ -297,8 +308,31 @@ model Provider {
 
   odps ODP[]
 
+  telegramSettings TelegramSettings[]
   conversations Conversation[]
   applicants Applicant[]
+
+
+  paymentProofs PaymentProofs[]
+}
+
+model TelegramSettings {
+  id          String   @id @default(uuid()) @db.Uuid
+  enabled Boolean @default(false)
+  type TelegramNotificationType
+  chatId String @unique
+  botToken String @unique
+  providerId String @db.Uuid @unique
+  provider Provider @relation(fields: [providerId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum TelegramNotificationType {
+  BILLING
+  PAYMENT
+  TICKET
+  SYSTEM_ALERT
 }
 
 enum BranchStatus {
