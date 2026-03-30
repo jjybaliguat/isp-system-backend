@@ -25,6 +25,7 @@ import uploadImageRoute from './modules/upload-image/uploadImageRoute'
 import settingsRoute from './modules/settings/settingsRoute' 
 import hierarchyRoute from './modules/network-hierarchy/network-hierarchy-route' 
 import mikrotikRoute from './modules/mikrotik/mikrotikRoutes' 
+import contactRoute from './modules/contact/contactRoute'
 import cookieParser from "cookie-parser";
 import { registerTenantJobs } from "./jobs/jobManager";
 import cron from 'node-cron'
@@ -105,6 +106,7 @@ app.use("/api/upload-image", uploadImageRoute)
 app.use("/api/settings", settingsRoute)
 app.use("/api/network-hierarchy", hierarchyRoute)
 app.use("/api/mikrotik", mikrotikRoute)
+app.use("/api/contact", contactRoute)
 
 app.get('/health', (req: Request, res: Response) => {
     res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
@@ -121,7 +123,7 @@ cron.schedule('0 0 * * *', async () => {
 }, { timezone: "Asia/Manila" });
 
 cron.schedule(
-  "* * * * *",
+  "*/3 * * * *",
   async () => {
     try {
       await cleanupOldRecords();
@@ -132,9 +134,9 @@ cron.schedule(
 );
 
 scheduleDailyBackups();
-startPPPBandwidthCollector().catch(err => console.error("Collector error:", err));
+// startPPPBandwidthCollector().catch(err => console.error("Collector error:", err));
 
 
-app.listen(PORT, "0.0.0.0", () => {
+app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });

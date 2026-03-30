@@ -20,5 +20,6 @@ router.patch("/account/:id", authMiddleware_1.authenticateProvider, clientContro
 router.delete("/account/:id", authMiddleware_1.authenticateProvider, clientController_1.deleteClientAccount);
 router.patch("/:id", authMiddleware_1.authenticateProvider, clientController_1.updateClient);
 router.delete("/:id", authMiddleware_1.authenticateProvider, clientController_1.deleteClient);
+router.post("/:id/payment-proof", authMiddleware_1.authenticateProvider, clientController_1.submitPaymentProof);
 exports.default = router;
 //# sourceMappingURL=clientRoutes.js.map

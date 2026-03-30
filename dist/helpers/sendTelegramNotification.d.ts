@@ -1,0 +1,2 @@
+export declare function sendTelegramMessage(message: string, botToken: string, chatId: string): Promise<import("axios").AxiosResponse<any, any, {}> | undefined>;
+//# sourceMappingURL=sendTelegramNotification.d.ts.map

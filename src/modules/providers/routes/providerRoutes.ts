@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import {  createProvider, createSmsIntegrationSettings, deleteProvider, getOtherPaymentOptions, getProvider, getProviderById, getProviders, getProvidersWithFilteredResponse, getSmsIntegrationSettings, getStoredKey, testSemaphoreConnection, testXenditConnection, updateAccount, updateSemaphoreKey, updateXenditKey, uploadProviderLogo } from '../controllers/providerController';
+import {  createProvider, createSmsIntegrationSettings, createTelegramSettings, deleteProvider, getOtherPaymentOptions, getProvider, getProviderById, getProviders, getProvidersWithFilteredResponse, getSmsIntegrationSettings, getStoredKey, getTelegramSettings, testSemaphoreConnection, testTelegramConnection, testXenditConnection, updateAccount, updateSemaphoreKey, updateXenditKey, uploadProviderLogo } from '../controllers/providerController';
 import { authenticateProvider, validateProviderSmsKey, validateProviderXenditKey } from '../../../middlewares/authMiddleware';
 import { upload } from '../../../middlewares/imageSizeLimiter';
 
@@ -17,6 +17,9 @@ router.delete('/:id', authenticateProvider, deleteProvider);
 router.post('/xendit-key', authenticateProvider, updateXenditKey);
 router.post('/semaphore-key', authenticateProvider, updateSemaphoreKey);
 router.post('/sms-integration-settings', authenticateProvider, createSmsIntegrationSettings);
+router.post('/telegram-settings', authenticateProvider, createTelegramSettings);
+router.get('/telegram-settings', authenticateProvider, getTelegramSettings);
+router.post('/test-telegram-notif', authenticateProvider, testTelegramConnection);
 router.get('/sms-integration-settings', authenticateProvider, getSmsIntegrationSettings);
 router.get('/stored-keys', authenticateProvider, getStoredKey);
 router.get('/xendit-test', authenticateProvider, validateProviderXenditKey, testXenditConnection);

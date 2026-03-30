@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateBackupSettings = exports.updateDocumentsSettings = exports.updateBillingSettings = exports.updatePaymentSettings = exports.updateNotificationsSettings = void 0;
+exports.updateBackupSettings = exports.updateDocumentsSettings = exports.updateBillingSettings = exports.updatePaymentOptions = exports.updatePaymentSettings = exports.updateNotificationsSettings = void 0;
 const jobManager_1 = require("../../jobs/jobManager");
 const prisma_1 = __importDefault(require("../../utils/prisma"));
 const updateNotificationsSettings = async (req, res) => {
@@ -84,6 +84,43 @@ const updatePaymentSettings = async (req, res) => {
     }
 };
 exports.updatePaymentSettings = updatePaymentSettings;
+const updatePaymentOptions = async (req, res) => {
+    const { id, providerId } = req.user;
+    const { paymentOptions } = req.body;
+    // if(!paymentOptions || paymentOptions.length == 0) return res.status(400).json({message: "Missing required fields"})
+    try {
+        const user = await prisma_1.default.user.findUnique({
+            where: {
+                id
+            },
+            select: {
+                role: true
+            }
+        });
+        if (user?.role !== "SUPERADMIN")
+            return res.status(403).json({ message: "Forbidden: unable to perform the operation" });
+        // delete all paymentOptions belongs to this provider
+        await prisma_1.default.otherPaymentOptions.deleteMany({
+            where: {
+                providerId
+            }
+        });
+        const otherPaymentOption = await prisma_1.default.otherPaymentOptions.createMany({
+            data: paymentOptions.map((p) => {
+                return {
+                    ...p,
+                    providerId
+                };
+            })
+        });
+        return res.status(200).json(otherPaymentOption);
+    }
+    catch (error) {
+        console.log(error);
+        res.status(500).json({ message: "Internal Server Error" });
+    }
+};
+exports.updatePaymentOptions = updatePaymentOptions;
 const updateBillingSettings = async (req, res) => {
     const { autoInvoicing, invoiceGenerationDaysBeforeDue, sendInvoiceReminderDaysBeforeDue, } = req.body;
     const { providerId } = req.user;

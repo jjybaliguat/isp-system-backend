@@ -544,7 +544,12 @@ export const getUnpaidBillingById = async (req: Request, res: Response) => {
             return res.status(404).json({message: "Bill not found"})
         }
 
-        return res.status(200).json(bill)
+        const outstandingBalance = bill.amount - bill.paidAmount
+
+        return res.status(200).json({
+          ...bill,
+          outstandingBalance
+        })
     } catch (error) {
         console.log(error)
         return res.status(500).json({message: "Internal Server Error"})
@@ -574,7 +579,7 @@ export const getBillingById = async (req: Request, res: Response) => {
             return res.status(404).json({message: "Bill not found"})
         }
 
-        console.log(bill)
+        // console.log(bill)
 
         return res.status(200).json(bill)
     } catch (error) {
@@ -1338,3 +1343,109 @@ export const generateBillingForAllAccounts = async (req: Request, res: Response)
     return res.status(500).json({ message: "Failed to generate billing" })
   }
 }
+
+export const getPaymentProofs = async (req: Request, res: Response) => {
+  const { providerId } = req.user;
+
+  console.log("Fetching payment proofs for provider:", providerId);
+
+  const page = Number(req.query.page) || 1;
+  const limit = Number(req.query.limit) || 10;
+  const search =
+    typeof req.query.search === "string" ? req.query.search.trim() : "";
+  const month =
+    typeof req.query.month === "string" ? Number(req.query.month) : undefined;
+  const year =
+    typeof req.query.year === "string" ? Number(req.query.year) : undefined;
+
+  const skip = (page - 1) * limit;
+
+  try {
+    const where: any = {
+      providerId,
+      billing: {
+        client: {
+          providerId,
+        },
+      },
+    };
+
+    if (search) {
+      where.OR = [
+        {
+          billing: {
+            invoiceNumber: {
+              contains: search,
+              mode: "insensitive",
+            },
+          },
+        },
+        {
+          billing: {
+            client: {
+              fullName: {
+                contains: search,
+                mode: "insensitive",
+              },
+            },
+          },
+        },
+      ];
+    }
+
+    if (month || year) {
+      where.createdAt = {};
+
+      if (year) {
+        where.createdAt.gte = new Date(`${year}-01-01`);
+        where.createdAt.lte = new Date(`${year}-12-31`);
+      }
+
+      if (month && year) {
+        const start = new Date(year, month - 1, 1);
+        const end = new Date(year, month, 0, 23, 59, 59);
+
+        where.createdAt = {
+          gte: start,
+          lte: end,
+        };
+      }
+    }
+
+    const [paymentProofs, total] = await Promise.all([
+      prisma.paymentProofs.findMany({
+        where,
+        include: {
+          billing: {
+            include: {
+              client: true,
+              account: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        skip,
+        take: limit,
+      }),
+
+      prisma.paymentProofs.count({
+        where,
+      }),
+    ]);
+
+    return res.status(200).json({
+      data: paymentProofs,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};

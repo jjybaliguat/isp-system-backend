@@ -28,6 +28,7 @@ const uploadImageRoute_1 = __importDefault(require("./modules/upload-image/uploa
 const settingsRoute_1 = __importDefault(require("./modules/settings/settingsRoute"));
 const network_hierarchy_route_1 = __importDefault(require("./modules/network-hierarchy/network-hierarchy-route"));
 const mikrotikRoutes_1 = __importDefault(require("./modules/mikrotik/mikrotikRoutes"));
+const contactRoute_1 = __importDefault(require("./modules/contact/contactRoute"));
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const jobManager_1 = require("./jobs/jobManager");
 const node_cron_1 = __importDefault(require("node-cron"));
@@ -35,7 +36,6 @@ const checkOverdueInvoices_1 = require("./jobs/checkOverdueInvoices");
 const dailyBackups_1 = require("./jobs/dailyBackups");
 const client_1 = require("@prisma/client");
 const sendSmsWhenTheBillIsDue_1 = require("./jobs/sendSmsWhenTheBillIsDue");
-const collectMikrotikPPPoE_1 = require("./jobs/collectMikrotikPPPoE");
 const cleanup_1 = require("./jobs/cleanup");
 const prisma = new client_1.PrismaClient();
 const app = (0, express_1.default)();
@@ -95,6 +95,7 @@ app.use("/api/upload-image", uploadImageRoute_1.default);
 app.use("/api/settings", settingsRoute_1.default);
 app.use("/api/network-hierarchy", network_hierarchy_route_1.default);
 app.use("/api/mikrotik", mikrotikRoutes_1.default);
+app.use("/api/contact", contactRoute_1.default);
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
 });
@@ -108,7 +109,7 @@ node_cron_1.default.schedule('0 0 * * *', async () => {
         console.error("Error in daily cron job:", error);
     }
 }, { timezone: "Asia/Manila" });
-node_cron_1.default.schedule("* * * * *", async () => {
+node_cron_1.default.schedule("*/3 * * * *", async () => {
     try {
         await (0, cleanup_1.cleanupOldRecords)();
     }
@@ -117,8 +118,8 @@ node_cron_1.default.schedule("* * * * *", async () => {
     }
 }, { timezone: "Asia/Manila" });
 (0, dailyBackups_1.scheduleDailyBackups)();
-(0, collectMikrotikPPPoE_1.startPPPBandwidthCollector)().catch(err => console.error("Collector error:", err));
-app.listen(PORT, "0.0.0.0", () => {
+// startPPPBandwidthCollector().catch(err => console.error("Collector error:", err));
+app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
 //# sourceMappingURL=index.js.map

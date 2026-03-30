@@ -9,7 +9,7 @@ const prisma_1 = __importDefault(require("../utils/prisma"));
 async function cleanupOldRecords() {
     try {
         console.log("Running cleanup...");
-        const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 7 day ago
+        const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000); // 7 day ago
         const deleted = await prisma_1.default.pppoeBandwidth.deleteMany({
             where: { recordedAt: { lt: cutoff } },
         });
