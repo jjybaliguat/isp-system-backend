@@ -314,6 +314,9 @@ model Provider {
 
 
   paymentProofs PaymentProofs[]
+
+  mikrotikRouters MikrotikRouter[]
+  mikrotikRouterLimit Int @default(3)
 }
 
 model TelegramSettings {
@@ -801,4 +804,29 @@ model PppoeBandwidth {
 
   @@index([username, recordedAt], name: "idx_pppoe_user_time")
   @@map("pppoe_bandwidth")
+}
+
+model MikrotikRouter {
+  id          String   @id @default(uuid()) @db.Uuid
+  providerId  String   @db.Uuid
+  provider    Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  name        String
+  username    String
+  password    String
+  connectScript String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  wireguardKeys WireguardKeys?
+}
+
+model WireguardKeys {
+  id          String   @id @default(uuid()) @db.Uuid
+  mikrotikRouterId String?   @db.Uuid @unique
+  mikrotikRouter   MikrotikRouter? @relation(fields: [mikrotikRouterId], references: [id], onDelete: SetNull)
+  publicKey   String
+  privateKey  String
+  assignedIp String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
