@@ -1,0 +1,1 @@
+{"version":3,"file":"generateMikrotikScript.d.ts","sourceRoot":"","sources":["../../src/helpers/generateMikrotikScript.ts"],"names":[],"mappings":"AAAA,UAAU,YAAY;IACpB,SAAS,EAAE,MAAM,CAAC;IAClB,UAAU,EAAE,MAAM,CAAC;IACnB,UAAU,EAAE,MAAM,CAAC;CACpB;AAED,wBAAgB,6BAA6B,CAC3C,UAAU,EAAE,MAAM,EAClB,KAAK,EAAE,YAAY,EACnB,gBAAgB,EAAE,MAAM,EACxB,eAAe,EAAE,MAAM,EACvB,QAAQ,EAAE,MAAM,UAqCjB"}
