@@ -134,7 +134,7 @@ cron.schedule(
 );
 
 scheduleDailyBackups();
-// startPPPBandwidthCollector().catch(err => console.error("Collector error:", err));
+startPPPBandwidthCollector().catch(err => console.error("Collector error:", err));
 
 
 app.listen(PORT, () => {
