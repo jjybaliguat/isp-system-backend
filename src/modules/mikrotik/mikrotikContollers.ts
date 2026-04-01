@@ -143,12 +143,16 @@ export const getMikrotikStatus = async (req: Request, res: Response) => {
       host: router?.wireguardKeys?.assignedIp!,
       user: router?.username!,
       password: decrypt(router?.password!),
+      port: 8728,
+      timeout: 5000,
+      keepalive: true,
     });
 
     let connection: any | null = null;
 
     try {
       connection = await device.connect();
+
     } catch (err: any) {
       return res.status(200).json({
         status: "offline",
@@ -248,71 +252,120 @@ export const getPPPActive = async (
   }
 };
 
-export const getPPPActiveV2 = async (
-  req: Request,
-  res: Response
-) => {
-  const { providerId } = req.user;
+export const getPPPActiveV2 = async (req: Request, res: Response) => {
   const { id } = req.params as { id: string };
   const page = Number(req.query.page) || 1;
   const limit = Number(req.query.limit) || 10;
   const search =
-    typeof req.query.search === "string" ? req.query.search.trim().toLowerCase() : "";
+    typeof req.query.search === "string"
+      ? req.query.search.trim().toLowerCase()
+      : "";
 
   const offset = (page - 1) * limit;
 
-  
+  let device: RouterOSAPI | null = null;
+
   try {
     const router = await prisma.mikrotikRouter.findUnique({
       where: { id },
       include: { wireguardKeys: true },
     });
-    
-    const routerPass = decrypt(router?.password!)
-    if(!router) return res.status(404).json({message: "Mikrotik router not found"})
 
-    const conn = new RouterOSAPI({host: router?.wireguardKeys?.assignedIp!, user: router?.username!, password: routerPass!, port: 8728, timeout: 5000, keepalive: true});
-    
-    try {
-      await conn.connect();
-
-      if(!conn) return res.status(400).json({message: "Failed connecting to mikrotik"})
-
-      const pppActive = await conn.write("/ppp/active/print");
-      // 🔍 Search filter (you can customize fields)
-      const filtered = search
-        ? pppActive.filter((secret: any) => {
-            return (
-              secret.name?.toLowerCase().includes(search) ||
-              secret.service?.toLowerCase().includes(search) ||
-              secret.address?.toLowerCase().includes(search)
-            );
-          })
-        : pppActive;
-
-      const totalCount = filtered.length;
-      const totalPages = Math.ceil(totalCount / limit);
-
-      // 📄 Pagination
-      const paginatedData = filtered.slice(offset, offset + limit);
-
-      return res.status(200).json({
-        data: paginatedData,
-        pagination: {
-          page,
-          limit,
-          total: totalCount,
-          totalPages,
-        },
-      });
-    } catch (error) {
-      await conn.close();
-      // console.log("Error fetching latest PPPoE accounts:", error);
-      return res.status(500).json({ message: "Connection Error" });
+    // ✅ Validate router FIRST
+    if (!router) {
+      return res.status(404).json({ message: "Mikrotik router not found" });
     }
-  } catch (error) {
-    console.log("Error fetching latest PPPoE accounts:", error);
-    return res.status(500).json({ message: "Internal Server Error" });
+
+    if (!router.wireguardKeys?.assignedIp) {
+      return res.status(400).json({
+        message: "Router has no WireGuard IP",
+      });
+    }
+
+    const routerPass = decrypt(router.password);
+
+    device = new RouterOSAPI({
+      host: router.wireguardKeys.assignedIp,
+      user: router.username,
+      password: routerPass,
+      port: 8728,
+      timeout: 10000, // 🔥 increase timeout
+      keepalive: true,
+    });
+
+    device.on("error", (err: any) => {
+      console.log("RouterOSAPI Error Event:", err);
+    });
+
+    await device.connect();
+
+    let pppActive: any[] = [];
+
+    try {
+      pppActive = await device.write("/ppp/active/print");
+    } catch (err: any) {
+      // ✅ Handle EMPTY safely
+      if (
+        err?.message?.includes("!empty") ||
+        err?.errno === "UNKNOWNREPLY"
+      ) {
+        pppActive = [];
+      } else {
+        console.error("PPP Fetch Error:", err);
+
+        return res.status(500).json({
+          message: "Failed to fetch PPP active users",
+        });
+      }
+    }
+
+    // 🔍 Filtering
+    const filtered = search
+      ? pppActive.filter((secret: any) => {
+          return (
+            secret.name?.toLowerCase().includes(search) ||
+            secret.service?.toLowerCase().includes(search) ||
+            secret.address?.toLowerCase().includes(search)
+          );
+        })
+      : pppActive;
+
+    const totalCount = filtered.length;
+    const totalPages = Math.ceil(totalCount / limit);
+
+    return res.status(200).json({
+      data: filtered.slice(offset, offset + limit),
+      pagination: {
+        page,
+        limit,
+        total: totalCount,
+        totalPages,
+      },
+    });
+
+  } catch (error: any) {
+    console.error("MikroTik Connection Error:", error);
+
+    // ✅ Handle connection-specific errors
+    if (error?.errno === -4062) {
+      return res.status(503).json({
+        message: "Router unreachable",
+      });
+    }
+
+    return res.status(500).json({
+      message: "Internal Server Error",
+    });
+
+  } finally {
+    // ✅ NEVER let close crash your server
+    if (device) {
+      try {
+        await device.close();
+      } catch (e) {
+        console.warn("Failed to close MikroTik connection");
+      }
+    }
   }
 };
 
@@ -439,6 +492,104 @@ export const getPPPSecrets = async (req: Request, res: Response) => {
   }
 };
 
+export const getPPPSecretsV2 = async (req: Request, res: Response) => {
+  const { id, providerId } = req.user;
+  const {id: mikrotikId} = req.params as {id: string}
+
+  const page = Number(req.query.page) || 1;
+  const limit = Number(req.query.limit) || 10;
+  const status = typeof req.query.status === "string" ? req.query.status.trim().toLowerCase() : "All";
+  const search =
+    typeof req.query.search === "string" ? req.query.search.trim().toLowerCase() : "";
+
+  const offset = (page - 1) * limit;
+
+  const router = await prisma.mikrotikRouter.findUnique({
+    where: {
+      id: mikrotikId,
+      providerId
+    },
+    include: {
+      wireguardKeys: true
+    }
+  })
+
+  if (!router) {
+      return res.status(404).json({ message: "Mikrotik router not found" });
+    }
+
+    if (!router.wireguardKeys?.assignedIp) {
+      return res.status(400).json({
+        message: "Router has no WireGuard IP",
+      });
+    }
+
+    const routerPass = decrypt(router.password);
+
+  const device = new RouterOSAPI({
+      host: router.wireguardKeys.assignedIp,
+      user: router.username,
+      password: routerPass,
+      port: 8728,
+      timeout: 10000, // 🔥 increase timeout
+      keepalive: true,
+    });
+
+  const conn = await device.connect();
+  if (!conn) {
+    return res.status(400).json({ message: "Mikrotik Connection Failed" });
+  }
+
+  try {
+    const pppsecrets = await conn.write("/ppp/secret/print");
+
+    const normalizedSearch = search?.toLowerCase();
+
+    const filtered = pppsecrets.filter((secret: any) => {
+      const matchesSearch = normalizedSearch
+        ? [
+            secret.name,
+            secret.service,
+            secret.profile,
+          ].some(field =>
+            field?.toLowerCase().includes(normalizedSearch)
+          )
+        : true;
+
+      const matchesStatus =
+        status === "enabled"
+          ? secret.disabled === "false"
+          : status === "disabled"
+          ? secret.disabled === "true"
+          : true;
+
+      return matchesSearch && matchesStatus;
+    });
+
+    const totalCount = filtered.length;
+    const totalPages = Math.ceil(totalCount / limit);
+
+    // 📄 Pagination
+    const paginatedData = filtered.slice(offset, offset + limit);
+
+    await device.close()
+
+    return res.status(200).json({
+      data: paginatedData,
+      pagination: {
+        page,
+        limit,
+        total: totalCount,
+        totalPages,
+      },
+    });
+  } catch (error) {
+    await device.close();
+    console.log(error);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
 export const updatePPPSecrets = async (req: Request, res: Response) => {
   const {id, providerId} = req.user
   const { names, action } = req.body;
@@ -502,6 +653,109 @@ export const updatePPPSecrets = async (req: Request, res: Response) => {
 
   } catch (error) {
     if (conn) await closeMikrotikConnection();
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Internal Server Error",
+    });
+  }
+};
+
+export const updatePPPSecretsV2 = async (req: Request, res: Response) => {
+  const {id, providerId} = req.user
+  const { names, action } = req.body;
+  const {id: mikrotikId} = req.params as {id: string}
+  // ids: string[] (e.g. ["*1", "*2"])
+  // action: "delete" | "enable" | "disable"
+
+  const router = await prisma.mikrotikRouter.findUnique({
+    where: {
+      id: mikrotikId,
+      providerId
+    },
+    include: {
+      wireguardKeys: true
+    }
+  })
+
+  if (!router) {
+      return res.status(404).json({ message: "Mikrotik router not found" });
+    }
+
+    if (!router.wireguardKeys?.assignedIp) {
+      return res.status(400).json({
+        message: "Router has no WireGuard IP",
+      });
+    }
+
+    const routerPass = decrypt(router.password);
+
+  const device = new RouterOSAPI({
+      host: router.wireguardKeys.assignedIp,
+      user: router.username,
+      password: routerPass,
+      port: 8728,
+      timeout: 10000, // 🔥 increase timeout
+      keepalive: true,
+    });
+
+  let conn;
+
+  try {
+    conn = await device.connect();
+    if (!conn) {
+      return res.status(500).json({ message: "Failed to connect to MikroTik" });
+    }
+
+    for (const name of names) {
+      const secrets = await conn.write("/ppp/secret/print", [`?name=${name}`]);
+      const secretId = secrets[0]?.['.id'];
+      if (!secretId) {
+        console.warn(`Secret not found: ${name}`);
+        continue;
+      }
+      let actionStr = ''
+
+      switch (action) {
+        case "delete":
+          actionStr = "deleted"
+          await conn.write("/ppp/secret/remove", [`=.id=${secretId}`]);
+          break;
+        case "disable":
+          actionStr = "disabled"
+          await conn.write("/ppp/secret/disable", [`=.id=${secretId}`]);
+          const activeSession = await conn.write("/ppp/active/print", [`?name=${name}`]);
+          if(!activeSession[0]?.['.id']) break
+          else await conn.write("/ppp/active/remove", [`=.id=${activeSession[0]['.id']}`]);
+          break;
+        case "enable":
+          actionStr = "enabled"
+          await conn.write("/ppp/secret/enable", [`=.id=${secretId}`]);
+          break;
+
+        default:
+          return res.status(400).json({ message: "Invalid action" });
+      }
+
+      await prisma.log.create({
+        data: {
+          action: action.toUpperCase(),
+          entity: "Mikrotik",
+          userId: id,
+          providerId,
+          message: `Mikrotik PPP ${name} ${actionStr}`
+        }
+      })
+    }
+
+    await device.close();
+
+    return res.status(200).json({
+      message: `PPP secrets ${action}d successfully`,
+    });
+
+  } catch (error) {
+    if (conn) await device.close();
     console.error(error);
 
     return res.status(500).json({

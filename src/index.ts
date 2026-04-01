@@ -1,6 +1,6 @@
 process.env.TZ = 'Asia/Manila';
 
-import express, { Request, Response } from 'express';
+import express, { NextFunction, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import cors from 'cors';
@@ -35,6 +35,14 @@ import { PrismaClient } from '@prisma/client';
 import { sendSmsWhenTheBillIsDue } from './jobs/sendSmsWhenTheBillIsDue';
 import { startPPPBandwidthCollector } from './jobs/collectMikrotikPPPoE';
 import { cleanupOldRecords } from './jobs/cleanup';
+
+process.on("unhandledRejection", (reason) => {
+  console.error("UNHANDLED REJECTION:", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("UNCAUGHT EXCEPTION:", err);
+  return 
+});
 
 const prisma = new PrismaClient();
 
@@ -108,6 +116,14 @@ app.use("/api/network-hierarchy", hierarchyRoute)
 app.use("/api/mikrotik", mikrotikRoute)
 app.use("/api/contact", contactRoute)
 
+app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+  console.error("EXPRESS ERROR:", err);
+
+  res.status(500).json({
+    message: "Internal Server Error",
+  });
+});
+
 app.get('/health', (req: Request, res: Response) => {
     res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
 })
@@ -134,7 +150,7 @@ cron.schedule(
 );
 
 scheduleDailyBackups();
-startPPPBandwidthCollector().catch(err => console.error("Collector error:", err));
+// startPPPBandwidthCollector().catch(err => console.error("Collector error:", err));
 
 
 app.listen(PORT, () => {
