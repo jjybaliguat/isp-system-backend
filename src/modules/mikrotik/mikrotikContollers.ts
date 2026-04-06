@@ -4,10 +4,15 @@ import { closeMikrotikConnection, closeMikrotikConnectionV2, getMikrotikConnecti
 import { decrypt, encrypt } from "../../utils/hasher";
 import { generateMikrotikConnectScript } from "../../helpers/generateMikrotikScript";
 import { RouterOSAPI } from 'node-routeros';
+import { UserRole } from "@prisma/client";
 
 export const createMikrotikRouter = async (req: Request, res: Response) => {
-  const { id: userId, providerId } = req.user;
+  const { id: userId, providerId, role } = req.user;
   const { name, username, password } = req.body;
+
+  if (role !== UserRole.SUPERADMIN) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
 
   try {
     const provider = await prisma.provider.findUnique({
@@ -167,9 +172,118 @@ export const getMikrotikStatus = async (req: Request, res: Response) => {
   }
 }
 
+export const getPPPProfiles = async (req: Request, res: Response) => {
+  const { id } = req.params as { id: string };
+  const { providerId } = req.user;
+
+  try {
+    const mikrotikRouter = await prisma.mikrotikRouter.findUnique({
+      where: {
+        id,
+        providerId,
+      },
+      include: {
+        wireguardKeys: true,
+      },
+    });
+
+    if (!mikrotikRouter) {
+      return res.status(404).json({ message: "Mikrotik router not found" });
+    }
+
+    const routerPass = decrypt(mikrotikRouter.password);
+
+    const device = new RouterOSAPI({
+      host: mikrotikRouter.wireguardKeys?.assignedIp!,
+      user: mikrotikRouter.username,
+      password: routerPass,
+      port: 8728,
+      timeout: 10000,
+      keepalive: true,
+    });
+
+    await device.connect();
+
+    try {
+      const profiles = await device.write("/ppp/profile/print");
+
+      const formattedProfiles = profiles.map((p: any) => ({
+        id: p[".id"],
+        name: p.name,
+        localAddress: p["local-address"],
+        remoteAddress: p["remote-address"],
+        rateLimit: p["rate-limit"],
+        dnsServer: p["dns-server"],
+        onlyOne: p["only-one"] === "true",
+        changeTcpMss: p["change-tcp-mss"] === "true",
+      }));
+
+      return res.status(200).json(formattedProfiles);
+    } finally {
+      device.close();
+    }
+  } catch (error: any) {
+    console.log("Get PPP Profiles Error:", error);
+
+    return res.status(500).json({
+      message: "Failed to fetch PPP profiles",
+      error: error?.message || error,
+    });
+  }
+};
+
+export const updateMikrotikRouter = async(req: Request, res: Response) => {
+  const {id} = req.params as {id: string}
+  const {id: userId, providerId, role} = req.user
+  const {name, username, password} = req.body
+
+  console.log("updating")
+
+  if (role !== UserRole.SUPERADMIN) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+  try {
+    const device = await prisma.mikrotikRouter.findUnique({
+      where: {
+        id
+      },
+      select: {
+        password: true
+      }
+    })
+    
+    if(!device) return res.status(404).json({message: "Mikrotik router not found."})
+
+    let newPass = password;
+    const isPasswordChanged = device?.password !== newPass
+
+    if(isPasswordChanged)
+      newPass = encrypt(password)
+
+    await prisma.mikrotikRouter.update({
+      where: {
+        id,
+        providerId
+      },
+      data: {
+        name, username, password: newPass
+      }
+    })
+
+    return res.status(200).json({message: "Mikrotik router updated successfully"})
+  } catch (error) {
+    console.log(error)
+    return res.status(500).json({message: "Internal Server Error"})
+  }
+}
+
 export const deleteMikrotikRouter = async (req: Request, res: Response) => {
-  const { id: userId, providerId } = req.user;
+  const { id: userId, providerId, role } = req.user;
   const routerId = req.params.id as string;
+
+  if (role !== UserRole.SUPERADMIN) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
 
   try {
     const router = await prisma.mikrotikRouter.findUnique({
@@ -587,6 +701,177 @@ export const getPPPSecretsV2 = async (req: Request, res: Response) => {
     await device.close();
     console.log(error);
     return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+export const updatePPPSecret = async (req: Request, res: Response) => {
+  const { routerId, name, password, profile } = req.body;
+  const { id: userId, providerId, role } = req.user;
+
+  if (!name) {
+    return res.status(400).json({ message: "Name is required." });
+  }
+
+  if (role !== UserRole.ADMIN && role !== UserRole.SUPERADMIN) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  try {
+    const mikrotikRouter = await prisma.mikrotikRouter.findUnique({
+      where: {
+        id: routerId,
+        providerId,
+      },
+      include: {
+        wireguardKeys: true,
+      },
+    });
+
+    if (!mikrotikRouter) {
+      return res.status(404).json({ message: "Mikrotik router not found" });
+    }
+
+    const routerPass = decrypt(mikrotikRouter.password);
+
+    const device = new RouterOSAPI({
+      host: mikrotikRouter.wireguardKeys?.assignedIp!,
+      user: mikrotikRouter.username,
+      password: routerPass,
+      port: 8728,
+      timeout: 10000,
+      keepalive: true,
+    });
+
+    await device.connect();
+
+    try {
+      const existing = await device.write("/ppp/secret/print", [
+        `?name=${name}`,
+      ]);
+
+      if (existing.length === 0) {
+        return res.status(404).json({
+          message: "PPP secret not found",
+        });
+      }
+
+      const secretId = existing[0]![".id"]
+
+      const params: string[] = [`=.id=${secretId}`];
+
+      if (password) params.push(`=password=${password}`);
+      if (profile) params.push(`=profile=${profile}`);
+
+      await device.write("/ppp/secret/set", params);
+
+      await prisma.log.create({
+        data: {
+          entity: "Mikrotik",
+          action: "Update",
+          userId,
+          message: `Mikrotik PPP ${name} udpated`,
+          providerId
+        }
+      })
+
+      return res.status(200).json({
+        message: "PPP secret updated successfully",
+      });
+    } finally {
+      device.close();
+    }
+  } catch (error: any) {
+    console.error("Update PPP Secret Error:", error);
+
+    return res.status(500).json({
+      message: "Failed to update PPP secret",
+      error: error?.message || error,
+    });
+  }
+};
+
+export const createPPPSecret = async (req: Request, res: Response) => {
+  const { routerId, name, password, profile } = req.body;
+  const { id: userId, providerId, role } = req.user;
+
+  if (!name || !password) {
+    return res.status(400).json({ message: "Missing required fields." });
+  }
+
+  if (role !== UserRole.ADMIN && role !== UserRole.SUPERADMIN) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  try {
+    const mikrotikRouter = await prisma.mikrotikRouter.findUnique({
+      where: {
+        id: routerId,
+        providerId,
+      },
+      include: {
+        wireguardKeys: true,
+      },
+    });
+
+    if (!mikrotikRouter) {
+      return res.status(404).json({ message: "Mikrotik router not found" });
+    }
+
+    const routerPass = decrypt(mikrotikRouter.password);
+
+    const device = new RouterOSAPI({
+      host: mikrotikRouter.wireguardKeys?.assignedIp!,
+      user: mikrotikRouter.username,
+      password: routerPass,
+      port: 8728,
+      timeout: 10000,
+      keepalive: true,
+    });
+
+    await device.connect();
+
+    try {
+      const existing = await device.write("/ppp/secret/print", [
+        `?name=${name}`,
+      ]);
+
+      if (existing.length > 0) {
+        return res.status(409).json({
+          message: "PPP secret already exists",
+        });
+      }
+
+      await device.write("/ppp/secret/add", [
+        `=name=${name}`,
+        `=password=${password}`,
+        `=service=pppoe`,
+        `=profile=${profile}`,
+        `=disabled=no`,
+      ]);
+
+      await prisma.log.create({
+        data: {
+          entity: "Mikrotik",
+          action: "Create",
+          userId,
+          message: `Mikrotik PPP ${name} created`,
+          providerId
+        }
+      })
+
+      return res.status(201).json({
+        message: "PPP secret created successfully",
+      });
+    } finally {
+      device.close();
+    }
+  } catch (error: any) {
+    console.error("PPP Secret Error:", error);
+
+    return res.status(500).json({
+      message: "Failed to create PPP secret",
+      error: error?.message || error,
+    });
   }
 };
 
