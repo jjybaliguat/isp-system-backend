@@ -37,6 +37,13 @@ const dailyBackups_1 = require("./jobs/dailyBackups");
 const client_1 = require("@prisma/client");
 const sendSmsWhenTheBillIsDue_1 = require("./jobs/sendSmsWhenTheBillIsDue");
 const cleanup_1 = require("./jobs/cleanup");
+process.on("unhandledRejection", (reason) => {
+    console.error("UNHANDLED REJECTION:", reason);
+});
+process.on("uncaughtException", (err) => {
+    console.error("UNCAUGHT EXCEPTION:", err);
+    return;
+});
 const prisma = new client_1.PrismaClient();
 const app = (0, express_1.default)();
 const trustProxySetting = process.env.TRUST_PROXY ??
@@ -96,6 +103,12 @@ app.use("/api/settings", settingsRoute_1.default);
 app.use("/api/network-hierarchy", network_hierarchy_route_1.default);
 app.use("/api/mikrotik", mikrotikRoutes_1.default);
 app.use("/api/contact", contactRoute_1.default);
+app.use((err, req, res, next) => {
+    console.error("EXPRESS ERROR:", err);
+    res.status(500).json({
+        message: "Internal Server Error",
+    });
+});
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
 });
