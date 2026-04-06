@@ -1,6 +1,6 @@
 import express from 'express'
 import { authenticateProvider } from '../../middlewares/authMiddleware';
-import { createMikrotikRouter, createPPPSecret, deleteMikrotikRouter, getMikrotikRouters, getMikrotikStatus, getPPPActive, getPPPActiveV2, getPPPoEHistory, getPPPProfiles, getPPPSecrets, getPPPSecretsV2, updateMikrotikRouter, updatePPPSecret, updatePPPSecrets, updatePPPSecretsV2 } from './mikrotikContollers';
+import { createMikrotikRouter, createPPPSecret, deleteMikrotikRouter, getMikrotikRouters, getMikrotikStatus, getPPPActive, getPPPActiveV2, getPPPoEHistory, getPPPProfiles, getPPPSecrets, getPPPSecretsV2, getRouterSystemInfo, updateMikrotikRouter, updatePPPSecret, updatePPPSecrets, updatePPPSecretsV2 } from './mikrotikContollers';
 
 const router = express.Router();
 
@@ -19,5 +19,6 @@ router.patch("/:id/ppp/secrets", authenticateProvider, updatePPPSecretsV2)
 router.get("/ppp/active", authenticateProvider, getPPPActive)
 router.get("/:id/ppp/active", authenticateProvider, getPPPActiveV2)
 router.get("/ppp/history", authenticateProvider, getPPPoEHistory)
+router.get("/:id/system", authenticateProvider, getRouterSystemInfo)
 
 export default router

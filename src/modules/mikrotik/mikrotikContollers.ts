@@ -1048,3 +1048,82 @@ export const updatePPPSecretsV2 = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const getRouterSystemInfo = async (req: Request, res: Response) => {
+  const { id } = req.params as { id: string };
+  const { providerId } = req.user;
+
+  try {
+    const mikrotikRouter = await prisma.mikrotikRouter.findUnique({
+      where: {
+        id,
+        providerId,
+      },
+      include: {
+        wireguardKeys: true,
+      },
+    });
+
+    if (!mikrotikRouter) {
+      return res.status(404).json({ message: "Mikrotik router not found" });
+    }
+
+    const routerPass = decrypt(mikrotikRouter.password);
+
+    const device = new RouterOSAPI({
+      host: mikrotikRouter.wireguardKeys?.assignedIp!,
+      user: mikrotikRouter.username,
+      password: routerPass,
+      port: 8728,
+      timeout: 10000,
+      keepalive: true,
+    });
+
+    await device.connect();
+
+    try {
+      // 📊 System resources
+      const [resource] = await device.write("/system/resource/print");
+
+      // 🏷️ Identity
+      const [identity] = await device.write("/system/identity/print");
+
+      if (!resource || !identity) {
+        return res.status(500).json({
+          message: "Failed to fetch router info",
+        });
+      }
+
+      // 🧠 Format response
+      const data = {
+        identity: identity.name,
+        uptime: resource.uptime,
+        cpu: {
+          load: Number(resource["cpu-load"]), // %
+          count: Number(resource["cpu-count"]),
+          frequency: resource["cpu-frequency"], // MHz
+        },
+        memory: {
+          total: Number(resource["total-memory"]),
+          free: Number(resource["free-memory"]),
+          used:
+            Number(resource["total-memory"]) -
+            Number(resource["free-memory"]),
+        },
+        version: resource.version,
+        boardName: resource["board-name"],
+      };
+
+      return res.status(200).json(data);
+    } finally {
+      device.close();
+    }
+  } catch (error: any) {
+    console.error("Router System Info Error:", error);
+
+    return res.status(500).json({
+      message: "Failed to fetch router system info",
+      error: error?.message || error,
+    });
+  }
+};
