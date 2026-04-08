@@ -925,7 +925,7 @@ export const updatePPPSecrets = async (req: Request, res: Response) => {
           entity: "Mikrotik",
           userId: id,
           providerId,
-          message: `Mikrotik PPP ${name} ${actionStr}`
+          message: `Mikrotik PPP secret ${name} ${actionStr}`
         }
       })
     }
@@ -945,6 +945,78 @@ export const updatePPPSecrets = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const deletePPPactive = async(req: Request, res: Response) => {
+  const {names} = req.body as {names: string[]}
+  const {id: userId, providerId} = req.user
+  const {id: mikrotikId} = req.params as {id: string}
+
+  const router = await prisma.mikrotikRouter.findUnique({
+    where: {
+      id: mikrotikId,
+      providerId
+    },
+    include: {
+      wireguardKeys: true
+    }
+  })
+
+  if (!router) {
+      return res.status(404).json({ message: "Mikrotik router not found" });
+    }
+
+    if (!router.wireguardKeys?.assignedIp) {
+      return res.status(400).json({
+        message: "Router has no WireGuard IP",
+      });
+    }
+
+    const routerPass = decrypt(router.password);
+
+  const device = new RouterOSAPI({
+      host: router.wireguardKeys.assignedIp,
+      user: router.username,
+      password: routerPass,
+      port: 8728,
+      timeout: 10000, // 🔥 increase timeout
+      keepalive: true,
+    });
+
+  let conn: RouterOSAPI;
+
+  try {
+    conn = await device.connect();
+
+    const actives = await conn.write("/ppp/active/print");
+    const activeMap = new Map(
+      actives.map(a => [a.name, a[".id"]])
+    );
+
+    const idsToRemove = names
+      .map(name => activeMap.get(name))
+      .filter(Boolean);
+
+    await Promise.all(
+      idsToRemove.map(id =>
+        conn.write("/ppp/active/remove", [`=.id=${id}`])
+      )
+    );
+
+    // 4️⃣ Batch DB logs (instead of per loop)
+    await prisma.log.createMany({
+      data: names.map(name => ({
+        action: "DELETE",
+        entity: "Mikrotik",
+        userId,
+        providerId,
+        message: `Mikrotik PPP active ${name} removed`
+      }))
+    });
+  } catch (error) {
+    console.log(error)
+    return res.status(500).json({message: "Internal Server"})
+  }
+}
 
 export const updatePPPSecretsV2 = async (req: Request, res: Response) => {
   const {id, providerId} = req.user

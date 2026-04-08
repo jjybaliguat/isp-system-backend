@@ -326,7 +326,7 @@ model TelegramSettings {
   chatId String @unique
   botToken String @unique
   providerId String @db.Uuid @unique
-  provider Provider @relation(fields: [providerId], references: [id])
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -519,7 +519,7 @@ model Employees {
   teamId  String? @db.Uuid
   team   EmployeesTeam? @relation(fields: [teamId], references: [id], onDelete: SetNull)
   providerId String @db.Uuid
-  provider Provider @relation(fields: [providerId], references: [id])
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
   user User?
 
   createdAt DateTime @default(now())
@@ -531,7 +531,7 @@ model EmployeesTeam {
   id String    @id @default(uuid()) @db.Uuid
   name String
   providerId String @db.Uuid
-  provider Provider @relation(fields: [providerId], references: [id])
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
   assignedTickets Ticket[] @relation("assignedTickets")
 
   employees Employees[]

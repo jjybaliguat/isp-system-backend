@@ -77,12 +77,17 @@ export const getProviders = async (req: Request, res: Response) => {
             prisma.provider.findMany({
                 where: whereClause,
                 include: {
-                    branches: true,
+                branches: true,
+                _count: {
+                    select: {
                     clients: true
+                    }
+                }
                 }
             }),
-            prisma.provider.count({where: whereClause})
+            prisma.provider.count({ where: whereClause })
         ])
+
         return res.status(200).json({
             data: providers,
             pagination: {
