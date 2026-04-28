@@ -290,6 +290,7 @@ model Provider {
   teams          EmployeesTeam[]
   settings  Json? @default("{}")
   smsIntegrationSettings SmsIntegrationSettings?
+  websiteModal WebsiteModal?
   
   /// 🔗 Self relation (Parent → Branches)
   parentProviderId String?  @db.Uuid
@@ -317,6 +318,17 @@ model Provider {
 
   mikrotikRouters MikrotikRouter[]
   mikrotikRouterLimit Int @default(3)
+}
+
+model WebsiteModal {
+  id          String   @id @default(uuid()) @db.Uuid
+  providerId  String   @db.Uuid @unique
+  provider    Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  isActive    Boolean  @default(false)
+  description String
+  imageUrl    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model TelegramSettings {
@@ -830,3 +842,4 @@ model WireguardKeys {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+

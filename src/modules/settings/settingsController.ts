@@ -253,3 +253,58 @@ export const updateBackupSettings = async(req: Request, res: Response) => {
     return res.status(500).json({ message: "Internal server error" });
   }
 }
+
+
+export const updateWebsiteModal = async(req: Request, res: Response) => {
+    const {providerId} = req.user
+    const {isActive, description, imageUrl} = req.body
+
+    try {
+        const existingModal = await prisma.websiteModal.findUnique({
+            where: {
+                providerId
+            }
+        })
+        if(existingModal) {
+            const updatedModal = await prisma.websiteModal.update({
+                where: {
+                    providerId
+                },
+                data: {
+                    isActive,
+                    description,
+                    imageUrl
+                }
+            })
+            return res.status(200).json(updatedModal)
+        } else {
+            const newModal = await prisma.websiteModal.create({
+                data: {
+                    providerId,
+                    isActive,
+                    description,
+                    imageUrl
+                }
+            })
+            return res.status(201).json(newModal)
+        }
+    } catch (error) {
+        console.log(error)
+        res.status(500).json({ message: 'Internal server error' })
+    }
+}
+
+export const getWebsiteModal = async(req: Request, res: Response) => {
+    const {providerId} = req.user
+    try {
+        const modal = await prisma.websiteModal.findUnique({
+            where: {
+                providerId
+            }
+        })
+        return res.status(200).json(modal)
+    } catch (error) {
+        console.log(error)
+        res.status(500).json({ message: 'Internal server error' })
+    }
+}
